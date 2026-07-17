@@ -153,6 +153,37 @@ HID-Implementierung oder einem gepflegten Fork.
    einschalten → WLAN `DaTurn-Setup` → `http://4.4.4.4` → XR18-Daten eintragen.
    Fehlersuche: `DEBUG_MODE 1` setzen und seriellen Monitor mit 115200 Baud öffnen.
 
+## Display-Variante: Waveshare ESP32-S3-Touch-LCD-1.47 (`DaTurn_S3/`)
+
+Alternative Hardware mit 1,47″-Farbdisplay (172×320, ST7789): Das Display zeigt den
+**aktiven Kanal groß als A/B** (grün = an, rot = stumm), Mixer-Kanalnummer, BLE-/WLAN-Status
+und im Setup-Modus die Konfig-Adresse. Funktional identisch zur XIAO-Variante
+(gleiche Pedale, LED-Logik, Weboberfläche, XR18-Steuerung); der Web-Installer
+erkennt automatisch, welches Board angeschlossen ist.
+
+| Anschluss | GPIO |
+|---|---|
+| Pedal 1 (ganz links, Kanal-Umschalter) | 4 |
+| Pedal 2 (Pfeil links) | 5 |
+| Pedal 3 (Pfeil rechts) | 6 |
+| Pedal 4 (ganz rechts, Mute) | 7 |
+| Status-LED | Onboard-RGB-LED (GPIO 38) |
+
+Pedale wieder gegen **GND** (interne Pull-ups). Besonderheiten:
+
+- **Aufwecken aus dem Deep Sleep nur über Pedal 1** (der esp32-Core 2.x kann beim S3
+  nur einen einzelnen Wakeup-Pin). Display und LED gehen im Deep Sleep aus.
+- Die Onboard-LED ist RGB ohne Weiß-Kanal – der Weiß-Blitz („Kanal A gewählt“) wird
+  als Weiß aus R+G+B gemischt, Farblogik sonst unverändert.
+- **Akku:** 3,7-V-LiPo an den Akku-Anschluss des Boards (bzw. VBAT-Pin), Laden über USB-C
+  übernimmt das Board. Akkustands-Anzeige per `setBatteryLevel()` ist vorbereitet,
+  sobald der Mess-GPIO des Boards verifiziert ist (siehe Waveshare-Wiki).
+- Arduino IDE: Board **ESP32S3 Dev Module** wählen (Flash Size 16MB, PSRAM „OPI PSRAM“,
+  Partition Scheme „Huge App“, USB CDC On Boot Enabled), zusätzlich **TFT_eSPI**
+  installieren und dessen `User_Setup.h` durch `DaTurn_S3/User_Setup_DaTurn_S3.h`
+  ersetzen (wichtig: `USE_HSPI_PORT`, sonst bleibt das Display schwarz).
+  Der CI-Build setzt das alles automatisch.
+
 ## Weitere Hinweise
 
 - **Deep Sleep:** nach 30 min ohne Pedaldruck (konfigurierbar über `IDLE_SLEEP_MS`).
