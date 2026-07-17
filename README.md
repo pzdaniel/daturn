@@ -141,7 +141,8 @@ dann entfällt das manuelle `USE_NIMBLE`.
 2. Arduino IDE 2.x: Boardverwalter-URL
    `https://espressif.github.io/arduino-esp32/package_esp32_index.json` eintragen,
    Paket **esp32 (Espressif Systems)** installieren, Board **XIAO_ESP32C3** wählen,
-   *USB CDC On Boot: Enabled* setzen.
+   *USB CDC On Boot: Enabled* und *Partition Scheme: Huge App (3MB No OTA)* setzen
+   (mit dem Standard-Schema ist der Flash zu 98 % voll).
 3. Bibliotheken wie oben beschrieben installieren (NeoPixel, NimBLE-Arduino **1.4.x**,
    ESP32-BLE-Keyboard als ZIP + `USE_NIMBLE` einkommentieren).
 4. XIAO per USB-C anschließen, Port wählen, Upload. Falls der Upload nicht startet:

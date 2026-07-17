@@ -39,7 +39,7 @@ jobs:
       - name: Sketch kompilieren (XIAO ESP32C3, NimBLE)
         run: |
           arduino-cli compile \
-            --fqbn esp32:esp32:XIAO_ESP32C3:CDCOnBoot=cdc \
+            --fqbn esp32:esp32:XIAO_ESP32C3:PartitionScheme=huge_app,CDCOnBoot=cdc \
             --build-property "compiler.cpp.extra_flags=-DUSE_NIMBLE" \
             --output-dir build \
             DaTurn
@@ -61,16 +61,22 @@ jobs:
           name: daturn-firmware
           path: site/*.bin
 
+      # Pages funktioniert bei privaten Repos nur mit GitHub Pro – deshalb continue-on-error:
+      # der Build bleibt gruen und die Firmware ist als Artefakt verfuegbar.
       - name: GitHub Pages konfigurieren
+        id: pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
       - name: Pages-Artefakt hochladen
+        if: steps.pages.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
       - name: Auf GitHub Pages deployen
         id: deployment
+        if: steps.pages.outcome == 'success'
         uses: actions/deploy-pages@v4
