@@ -2,14 +2,15 @@
 
 Fußschalter mit **4 Pedalen** (AirTurn-Umbau), portiert vom TTGO T-Display (siehe `legacy/`)
 auf den Seeed Studio XIAO ESP32C3. Zwei Pedale blättern per BLE-Tastatur Noten um, die beiden
-äußeren Pedale steuern ein **Behringer XR18** per OSC über WLAN (Kanal-Umschaltung und Mute
-für zwei Bässe).
+äußeren Pedale steuern ein **Behringer XR18** per OSC über WLAN: Umschalten zwischen zwei
+Mixer-Kanälen und Mute/Unmute des gewählten Kanals – z. B. für zwei Instrumente, von denen
+immer nur eines gespielt wird.
 
 ## Pedal-Belegung (von links nach rechts)
 
 | Pedal | XIAO-Pin | GPIO | Funktion | Weg |
 |---|---|---|---|---|
-| 1 (ganz links) | D0 | 2 | Umschalter Bass 1 ↔ Bass 2 | OSC/WLAN |
+| 1 (ganz links) | D0 | 2 | Umschalter Mixer-Kanal A ↔ B | OSC/WLAN |
 | 2 | D1 | 3 | Pfeil links (zurückblättern) | BLE-Tastatur |
 | 3 | D2 | 4 | Pfeil rechts (vorblättern) | BLE-Tastatur |
 | 4 (ganz rechts) | D3 | 5 | Mute/Unmute des gewählten Kanals | OSC/WLAN |
@@ -17,12 +18,12 @@ für zwei Bässe).
 Pedale jeweils gegen **GND** schalten (interne Pull-ups aktiv, keine externen Widerstände nötig).
 RGBW-LED (DIN) an **D10** (GPIO 10).
 
-**Logik der Bass-Umschaltung:** Pedal 1 wechselt den „gewählten“ Kanal (`BASS1_CH`/`BASS2_CH`
-im Sketch, Standard: Kanal 01 und 02) und **mutet dabei automatisch den verlassenen Kanal** –
-so können nie beide Bässe gleichzeitig offen sein. Pedal 4 toggelt Mute des gewählten Kanals.
-Typischer Ablauf beim Basswechsel: Pedal 4 (mute) → Bass wechseln → Pedal 1 (Kanal umschalten)
-→ Pedal 4 (unmute). Der Mute-Zustand wird laufend mit dem Mixer synchronisiert – auch wenn
-zwischendurch am Tablet gemutet wird, stimmt der Toggle.
+**Logik der Kanal-Umschaltung:** Pedal 1 wechselt den „gewählten“ Kanal (`DEF_CH_A`/`DEF_CH_B`
+im Sketch bzw. per Weboberfläche, Standard: Kanal 01 und 02) und **mutet dabei automatisch den
+verlassenen Kanal** – so können nie beide Kanäle gleichzeitig offen sein. Pedal 4 toggelt Mute
+des gewählten Kanals. Typischer Ablauf beim Instrumentenwechsel: Pedal 4 (mute) → Instrument
+wechseln → Pedal 1 (Kanal umschalten) → Pedal 4 (unmute). Der Mute-Zustand wird laufend mit dem
+Mixer synchronisiert – auch wenn zwischendurch am Tablet gemutet wird, stimmt der Toggle.
 
 ## LED-Anzeige
 
@@ -40,8 +41,8 @@ Neu hinzugekommen (nur für die zwei neuen Funktionen):
 
 | Aktion | Blitzfarbe |
 |---|---|
-| Umschalten auf Bass 1 | Weiß (W-Kanal) |
-| Umschalten auf Bass 2 | Gelb |
+| Umschalten auf Kanal A | Weiß (W-Kanal) |
+| Umschalten auf Kanal B | Gelb |
 | Kanal gemutet | Violett |
 | Kanal wieder an | Türkis |
 
@@ -108,8 +109,8 @@ Werkseinstellungen im Sketch:
 #define DEF_WIFI_SSID  "XR18-19-1B-07"  // SSID des XR18-Access-Points (steht auf dem Gerät/im Setup)
 #define DEF_WIFI_PASS  ""               // AP-Modus ab Werk offen
 #define DEF_XR18_IP    "192.168.1.1"    // AP-Modus: immer 192.168.1.1
-#define DEF_BASS1_CH   1                // Mixer-Kanal Bass 1
-#define DEF_BASS2_CH   2                // Mixer-Kanal Bass 2
+#define DEF_CH_A       1                // Mixer-Kanal A
+#define DEF_CH_B       2                // Mixer-Kanal B
 ```
 
 BLE (Umblättern) und WLAN (Mixer) laufen gleichzeitig – der ESP32-C3 teilt sich ein Funkmodul
@@ -156,7 +157,7 @@ dann entfällt das manuelle `USE_NIMBLE`.
 
 - **Deep Sleep:** nach 30 min ohne Pedaldruck (konfigurierbar über `IDLE_SLEEP_MS`).
   Jedes Pedal weckt das Gerät; der erste Druck nach dem Aufwachen dient nur dem
-  Aufwecken/Neuverbinden. Die Kanal-Auswahl (Bass 1/2) überlebt den Deep Sleep
+  Aufwecken/Neuverbinden. Die Kanal-Auswahl (A/B) überlebt den Deep Sleep
   (RTC-Speicher), der Mute-Zustand wird nach dem Aufwachen frisch vom Mixer abgefragt.
 - **Strapping-Pin:** GPIO 2 (D0, Umschalt-Pedal) beim Einschalten/Reset nicht gedrückt
   halten, sonst startet der Chip u. U. nicht. GPIO 2–5 wurden gewählt, weil beim C3 nur

@@ -3,7 +3,7 @@
  * Für Seeed Studio XIAO ESP32C3
  *
  * Pedal-Belegung (von links nach rechts):
- *   1 (D0): Kanal-Umschalter Bass 1 <-> Bass 2   (OSC an XR18 über WLAN)
+ *   1 (D0): Umschalter Mixer-Kanal A <-> B       (OSC an XR18 über WLAN)
  *   2 (D1): Pfeil links                          (BLE-Tastatur)
  *   3 (D2): Pfeil rechts                         (BLE-Tastatur)
  *   4 (D3): Mute/Unmute des gewählten Kanals     (OSC an XR18 über WLAN)
@@ -35,8 +35,8 @@
 #define DEF_WIFI_SSID   "XR18-19-1B-07"  // SSID des XR18 (Access-Point-Modus) bzw. des Band-Routers
 #define DEF_WIFI_PASS   ""               // XR18-AP ist ab Werk offen; im Client-Modus: WLAN-Passwort
 #define DEF_XR18_IP     "192.168.1.1"    // im AP-Modus hat das XR18 immer 192.168.1.1
-#define DEF_BASS1_CH    1                // Mixer-Kanal Bass 1 (1..16)
-#define DEF_BASS2_CH    2                // Mixer-Kanal Bass 2 (1..16)
+#define DEF_CH_A        1                // Mixer-Kanal A (1..16), z. B. Instrument 1
+#define DEF_CH_B        2                // Mixer-Kanal B (1..16), z. B. Instrument 2
 
 #define XR18_PORT       10024            // OSC-Port der X-AIR-Serie (X32 nutzt 10023)
 #define XREMOTE_MS      8000             // /xremote hält ~10 s – rechtzeitig erneuern
@@ -98,7 +98,7 @@ WiFiUDP udp;
 WebServer server(80);
 Preferences prefs;
 
-RTC_DATA_ATTR uint8_t selectedBass = 0;   // 0 = Bass 1, 1 = Bass 2; überlebt den Deep Sleep
+RTC_DATA_ATTR uint8_t selectedCh = 0;     // 0 = Kanal A, 1 = Kanal B; überlebt den Deep Sleep
 bool chMuted[2] = { true, true };         // lokales Abbild von /ch/xx/mix/on (wird vom Mixer synchronisiert)
 
 uint32_t currentColor   = 0xFFFFFFFF;     // ungültig → erzwingt erstes LED-Update
@@ -108,7 +108,7 @@ uint32_t lastActivityMs = 0;
 uint32_t lastXremoteMs  = 0;
 bool     apActive       = false;
 
-uint8_t bassChannel(uint8_t idx) { return idx == 0 ? cfg.ch1 : cfg.ch2; }
+uint8_t mixerChannel(uint8_t idx) { return idx == 0 ? cfg.ch1 : cfg.ch2; }
 
 // ---------- Konfiguration (NVS) ----------
 
@@ -117,8 +117,8 @@ void loadConfig() {
   cfg.ssid   = prefs.getString("ssid", DEF_WIFI_SSID);
   cfg.pass   = prefs.getString("pass", DEF_WIFI_PASS);
   cfg.xr18Ip = prefs.getString("ip",   DEF_XR18_IP);
-  cfg.ch1    = prefs.getUChar("ch1", DEF_BASS1_CH);
-  cfg.ch2    = prefs.getUChar("ch2", DEF_BASS2_CH);
+  cfg.ch1    = prefs.getUChar("ch1", DEF_CH_A);
+  cfg.ch2    = prefs.getUChar("ch2", DEF_CH_B);
   prefs.end();
 }
 
@@ -203,9 +203,9 @@ void chOnAddress(char *out, uint8_t ch) {
 }
 
 // /ch/xx/mix/on: 1 = Kanal an, 0 = gemutet
-void sendChOn(uint8_t bassIdx, bool on) {
+void sendChOn(uint8_t chIdx, bool on) {
   char addr[20];
-  chOnAddress(addr, bassChannel(bassIdx));
+  chOnAddress(addr, mixerChannel(chIdx));
   const int32_t v = on ? 1 : 0;
   oscSend(addr, &v);
   if (DEBUG_MODE) { Serial.print(addr); Serial.println(on ? " 1" : " 0"); }
@@ -223,7 +223,7 @@ void oscPoll() {
 
     for (uint8_t i = 0; i < 2; i++) {
       char expect[20];
-      chOnAddress(expect, bassChannel(i));
+      chOnAddress(expect, mixerChannel(i));
       if (strcmp(addr, expect) != 0) continue;
 
       size_t p = strlen(addr) + 1;
@@ -246,7 +246,7 @@ void oscTick(uint32_t now) {
     oscSend("/xremote", nullptr);              // Updates abonnieren (hält ~10 s)
     for (uint8_t i = 0; i < 2; i++) {          // Zustände zusätzlich aktiv abfragen
       char addr[20];
-      chOnAddress(addr, bassChannel(i));
+      chOnAddress(addr, mixerChannel(i));
       oscSend(addr, nullptr);
     }
   }
@@ -268,20 +268,20 @@ void triggerPedal(Pedal &p, uint32_t now) {
 
     case ACTION_CH_SWITCH:
       if (WiFi.status() != WL_CONNECTED) return;
-      sendChOn(selectedBass, false);           // verlassenen Kanal sicherheitshalber muten
-      chMuted[selectedBass] = true;
-      selectedBass ^= 1;
-      // Blitz zeigt die neue Auswahl: Weiß = Bass 1, Gelb = Bass 2
-      if (selectedBass == 0) flash(0, 0, 0, 100, now);
-      else                   flash(100, 60, 0, 0, now);
-      if (DEBUG_MODE) { Serial.print("Selected bass "); Serial.println(selectedBass + 1); }
+      sendChOn(selectedCh, false);             // verlassenen Kanal sicherheitshalber muten
+      chMuted[selectedCh] = true;
+      selectedCh ^= 1;
+      // Blitz zeigt die neue Auswahl: Weiß = Kanal A, Gelb = Kanal B
+      if (selectedCh == 0) flash(0, 0, 0, 100, now);
+      else                 flash(100, 60, 0, 0, now);
+      if (DEBUG_MODE) { Serial.print("Selected channel "); Serial.println(selectedCh == 0 ? "A" : "B"); }
       break;
 
     case ACTION_MUTE_TOGGLE: {
       if (WiFi.status() != WL_CONNECTED) return;
-      const bool muteNow = !chMuted[selectedBass];
-      sendChOn(selectedBass, !muteNow);
-      chMuted[selectedBass] = muteNow;
+      const bool muteNow = !chMuted[selectedCh];
+      sendChOn(selectedCh, !muteNow);
+      chMuted[selectedCh] = muteNow;
       // Blitz: Violett = gemutet, Türkis = wieder an
       if (muteNow) flash(100, 0, 100, 0, now);
       else         flash(0, 100, 100, 0, now);
@@ -335,10 +335,10 @@ void handleRoot() {
   h += F("<div class='card'><h2 style='margin-top:0'>Status</h2><table class='st'>");
   h += "<tr><td>WLAN</td><td>" + wifiState + "</td></tr>";
   h += String("<tr><td>BLE</td><td>") + (bleKeyboard.isConnected() ? "verbunden" : "nicht verbunden") + "</td></tr>";
-  h += "<tr><td>Gew&auml;hlt</td><td>Bass " + String(selectedBass + 1) +
-       " (Kanal " + String(bassChannel(selectedBass)) + ")</td></tr>";
-  h += String("<tr><td>Mute</td><td>Bass 1: ") + (chMuted[0] ? "stumm" : "an") +
-       " &middot; Bass 2: " + (chMuted[1] ? "stumm" : "an") + "</td></tr>";
+  h += String("<tr><td>Gew&auml;hlt</td><td>Kanal ") + (selectedCh == 0 ? "A" : "B") +
+       " (Mixer-Kanal " + String(mixerChannel(selectedCh)) + ")</td></tr>";
+  h += String("<tr><td>Mute</td><td>A: ") + (chMuted[0] ? "stumm" : "an") +
+       " &middot; B: " + (chMuted[1] ? "stumm" : "an") + "</td></tr>";
   h += F("</table></div>");
 
   h += F("<form method='POST' action='/save'><div class='card'>"
@@ -347,8 +347,8 @@ void handleRoot() {
   h += "<label>WLAN-Passwort (leer = offen)</label><input name='pass' value='" + htmlEscape(cfg.pass) + "'>";
   h += "<label>XR18-IP-Adresse</label><input name='ip' value='" + htmlEscape(cfg.xr18Ip) + "'>";
   h += F("</div><div class='card'><h2 style='margin-top:0'>Kan&auml;le</h2>");
-  h += "<label>Mixer-Kanal Bass 1</label><input name='ch1' type='number' min='1' max='16' value='" + String(cfg.ch1) + "'>";
-  h += "<label>Mixer-Kanal Bass 2</label><input name='ch2' type='number' min='1' max='16' value='" + String(cfg.ch2) + "'>";
+  h += "<label>Mixer-Kanal A</label><input name='ch1' type='number' min='1' max='16' value='" + String(cfg.ch1) + "'>";
+  h += "<label>Mixer-Kanal B</label><input name='ch2' type='number' min='1' max='16' value='" + String(cfg.ch2) + "'>";
   h += F("</div><button type='submit'>Speichern &amp; Neustart</button></form>"
          "</main></body></html>");
 
