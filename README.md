@@ -135,6 +135,22 @@ Alternative: fertig auf NimBLE/C3 angepasste Forks wie
 [ESP32-NimBLE-Keyboard](https://github.com/wakwak-koba/ESP32-NimBLE-Keyboard) –
 dann entfällt das manuelle `USE_NIMBLE`.
 
+## Flashen (Schritt für Schritt)
+
+1. Repo herunterladen; der Ordner `DaTurn/` mit `DaTurn.ino` muss so heißen bleiben.
+2. Arduino IDE 2.x: Boardverwalter-URL
+   `https://espressif.github.io/arduino-esp32/package_esp32_index.json` eintragen,
+   Paket **esp32 (Espressif Systems)** installieren, Board **XIAO_ESP32C3** wählen,
+   *USB CDC On Boot: Enabled* setzen.
+3. Bibliotheken wie oben beschrieben installieren (NeoPixel, NimBLE-Arduino **1.4.x**,
+   ESP32-BLE-Keyboard als ZIP + `USE_NIMBLE` einkommentieren).
+4. XIAO per USB-C anschließen, Port wählen, Upload. Falls der Upload nicht startet:
+   BOOT-Taste („B“) gedrückt halten, während man den XIAO einsteckt (Bootloader-Modus),
+   nach dem Flashen Reset drücken.
+5. Erster Test: LED blinkt blau → „DaTurn“ am Tablet koppeln. Danach Pedal 4 gedrückt
+   einschalten → WLAN `DaTurn-Setup` → `http://4.4.4.4` → XR18-Daten eintragen.
+   Fehlersuche: `DEBUG_MODE 1` setzen und seriellen Monitor mit 115200 Baud öffnen.
+
 ## Weitere Hinweise
 
 - **Deep Sleep:** nach 30 min ohne Pedaldruck (konfigurierbar über `IDLE_SLEEP_MS`).
