@@ -9,7 +9,7 @@
  *   4 (D3): Mute/Unmute des gewählten Kanals     (OSC an XR18 über WLAN)
  *
  * Konfiguration per Handy: http://daturn.local bzw. IP des ESP im XR18-WLAN.
- * Fallback-Access-Point "DaTurn-Setup" (Passwort: daturn123, Seite: http://192.168.4.1),
+ * Fallback-Access-Point "DaTurn-Setup" (Passwort: daturn4444, Seite: http://4.4.4.4),
  * wenn das konfigurierte WLAN nicht erreichbar ist oder Pedal 4 beim Einschalten
  * gehalten wird.
  *
@@ -43,8 +43,13 @@
 
 // ---------- Setup-Access-Point (Fallback / Ersteinrichtung) ----------
 #define AP_SSID         "DaTurn-Setup"
-#define AP_PASS         "daturn123"
+#define AP_PASS         "daturn4444"
 #define STA_TIMEOUT_MS  30000            // WLAN nach 30 s nicht da -> Setup-AP zusätzlich starten
+// Merk-IP des Setup-AP. Achtung: 4.4.4.4 ist eigentlich eine öffentliche Adresse –
+// falls die Seite am Handy nicht lädt, mobile Daten kurz ausschalten (sonst schickt
+// das Handy die Anfrage u. U. übers Mobilfunknetz ins Internet statt an den ESP).
+const IPAddress AP_IP(4, 4, 4, 4);
+const IPAddress AP_MASK(255, 255, 255, 0);
 
 // ---------- Pins (GPIO-Nummern, XIAO-Beschriftung im Kommentar) ----------
 #define RGBW_PIN        10                      // D10 – DIN der RGBW-LED
@@ -373,6 +378,8 @@ void startAp() {
   if (apActive) return;
   WiFi.mode(WIFI_AP_STA);                      // STA versucht parallel weiter zu verbinden
   WiFi.softAP(AP_SSID, AP_PASS);
+  delay(100);                                  // DHCP-Server erst nach softAP() umkonfigurieren
+  WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
   apActive = true;
   if (DEBUG_MODE) { Serial.print("Setup-AP: "); Serial.println(WiFi.softAPIP()); }
 }

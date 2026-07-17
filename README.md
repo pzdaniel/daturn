@@ -88,7 +88,12 @@ kein Umschalten nötig.
 erreichbar ist (30 s Timeout) oder **Pedal 4 beim Einschalten gehalten** wird, spannt
 der ESP zusätzlich ein eigenes WLAN auf:
 
-- SSID `DaTurn-Setup`, Passwort `daturn123`, Seite: **http://192.168.4.1**
+- SSID `DaTurn-Setup`, Passwort `daturn4444`, Seite: **http://4.4.4.4**
+
+Hinweis zur Merk-IP `4.4.4.4`: Das ist eigentlich eine öffentliche Internet-Adresse.
+Lädt die Seite am Handy nicht, kurz die **mobilen Daten ausschalten** – manche Handys
+schicken die Anfrage sonst übers Mobilfunknetz ins echte Internet statt an den ESP.
+Wer das vermeiden will, trägt im Sketch z. B. `192.168.4.4` als `AP_IP` ein.
 
 Zum Konflikt mit dem XR18: Die beiden Funknetze stören sich nicht (verschiedene SSIDs;
 läuft der ESP gleichzeitig als Client + AP, teilen sich beide sogar denselben Kanal).
