@@ -14,8 +14,7 @@
  * gehalten wird.
  *
  * Benötigte Bibliotheken (Details siehe README.md):
- *   - ESP32-BLE-Keyboard (T-vK) mit aktiviertem USE_NIMBLE
- *   - NimBLE-Arduino 1.4.x
+ *   - ESP32-BLE-Keyboard (T-vK), esp32-Core 2.0.17 (Core 3.x bootloopt, siehe README)
  *   - Adafruit NeoPixel
  */
 

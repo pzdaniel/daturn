@@ -26,21 +26,21 @@ jobs:
       - name: arduino-cli installieren
         uses: arduino/setup-arduino-cli@v2
 
+      # Core bewusst auf 2.0.17 gepinnt: ESP32-BLE-Keyboard crasht auf Core 3.x
+      # zur Laufzeit im BT-Controller-Init (kompiliert zwar, bootloopt aber).
       - name: ESP32-Core und Bibliotheken installieren
         run: |
           arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32
+          arduino-cli core install esp32:esp32@2.0.17
           arduino-cli lib install "Adafruit NeoPixel"
-          arduino-cli lib install "NimBLE-Arduino@1.4.3"
           mkdir -p ~/Arduino/libraries
           git clone --depth 1 https://github.com/T-vK/ESP32-BLE-Keyboard ~/Arduino/libraries/ESP32-BLE-Keyboard
 
-      - name: Sketch kompilieren (XIAO ESP32C3, NimBLE)
+      - name: Sketch kompilieren (XIAO ESP32C3)
         run: |
           arduino-cli compile \
             --fqbn esp32:esp32:XIAO_ESP32C3:PartitionScheme=huge_app,CDCOnBoot=cdc \
-            --build-property "compiler.cpp.extra_flags=-DUSE_NIMBLE" \
             --output-dir build \
             DaTurn
 

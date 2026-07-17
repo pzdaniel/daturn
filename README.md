@@ -121,31 +121,31 @@ BLE-Verbindung.
 
 ## Bibliotheken / Arduino-IDE-Setup
 
-1. **Board-Paket:** `esp32` von Espressif (Boardauswahl: *XIAO_ESP32C3*).
+1. **Board-Paket:** `esp32` von Espressif, **Version 2.0.17** (im Boardverwalter über das
+   Versions-Dropdown wählen!). Boardauswahl: *XIAO_ESP32C3*.
    Für den seriellen Monitor ggf. *USB CDC On Boot: Enabled* setzen.
-2. **ESP32-BLE-Keyboard** (T-vK): als ZIP von GitHub installieren.
-   Die Original-Bibliothek (Stand 0.3.2) kompiliert mit dem Bluedroid-Standardstack auf
-   aktuellen esp32-Cores (3.x) nicht mehr – deshalb **NimBLE aktivieren**:
-   in `BleKeyboard.h` die Zeile `#define USE_NIMBLE` einkommentieren.
-3. **NimBLE-Arduino** in Version **1.4.x** installieren (2.x hat eine geänderte API und ist
-   mit der alten BleKeyboard-Bibliothek nicht kompatibel).
-4. **Adafruit NeoPixel** über den Bibliotheksverwalter.
+2. **ESP32-BLE-Keyboard** (T-vK): als ZIP von GitHub installieren – unverändert lassen
+   (`USE_NIMBLE` **nicht** aktivieren).
+3. **Adafruit NeoPixel** über den Bibliotheksverwalter.
 
-Alternative: fertig auf NimBLE/C3 angepasste Forks wie
-[ESP32C3-BLE-Keyboard](https://github.com/pr4u4t/ESP32C3-BLE-Keyboard) oder
-[ESP32-NimBLE-Keyboard](https://github.com/wakwak-koba/ESP32-NimBLE-Keyboard) –
-dann entfällt das manuelle `USE_NIMBLE`.
+**Warum Core 2.0.17 und nicht 3.x?** Die ESP32-BLE-Keyboard-Bibliothek ist mit dem
+esp32-Core 3.x nicht kompatibel: Mit dem Standard-Stack kompiliert sie dort nicht,
+und mit NimBLE-Arduino 1.4.x kompiliert sie zwar, **crasht aber beim Start des
+BT-Controllers in einer Boot-Schleife** (Guru Meditation Error, Sprung auf 0x0).
+Core 2.0.17 + Standard-Stack (Bluedroid) ist die seit Jahren stabile Kombination.
+Langfristige Alternative wäre ein Umstieg auf NimBLE-Arduino 2.x mit eigener
+HID-Implementierung oder einem gepflegten Fork.
 
 ## Flashen (Schritt für Schritt)
 
 1. Repo herunterladen; der Ordner `DaTurn/` mit `DaTurn.ino` muss so heißen bleiben.
 2. Arduino IDE 2.x: Boardverwalter-URL
    `https://espressif.github.io/arduino-esp32/package_esp32_index.json` eintragen,
-   Paket **esp32 (Espressif Systems)** installieren, Board **XIAO_ESP32C3** wählen,
-   *USB CDC On Boot: Enabled* und *Partition Scheme: Huge App (3MB No OTA)* setzen
-   (mit dem Standard-Schema ist der Flash zu 98 % voll).
-3. Bibliotheken wie oben beschrieben installieren (NeoPixel, NimBLE-Arduino **1.4.x**,
-   ESP32-BLE-Keyboard als ZIP + `USE_NIMBLE` einkommentieren).
+   Paket **esp32 (Espressif Systems)** in Version **2.0.17** installieren (nicht 3.x,
+   siehe oben), Board **XIAO_ESP32C3** wählen, *USB CDC On Boot: Enabled* und
+   *Partition Scheme: Huge App (3MB No OTA)* setzen.
+3. Bibliotheken wie oben beschrieben installieren (NeoPixel, ESP32-BLE-Keyboard als
+   ZIP, unverändert).
 4. XIAO per USB-C anschließen, Port wählen, Upload. Falls der Upload nicht startet:
    BOOT-Taste („B“) gedrückt halten, während man den XIAO einsteckt (Bootloader-Modus),
    nach dem Flashen Reset drücken.
