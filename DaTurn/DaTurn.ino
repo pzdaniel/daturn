@@ -8,6 +8,11 @@
  *   3 (D2): Pfeil rechts                         (BLE-Tastatur)
  *   4 (D3): Mute/Unmute des gewählten Kanals     (OSC an XR18 über WLAN)
  *
+ * Konfiguration per Handy: http://daturn.local bzw. IP des ESP im XR18-WLAN.
+ * Fallback-Access-Point "DaTurn-Setup" (Passwort: daturn123, Seite: http://192.168.4.1),
+ * wenn das konfigurierte WLAN nicht erreichbar ist oder Pedal 4 beim Einschalten
+ * gehalten wird.
+ *
  * Benötigte Bibliotheken (Details siehe README.md):
  *   - ESP32-BLE-Keyboard (T-vK) mit aktiviertem USE_NIMBLE
  *   - NimBLE-Arduino 1.4.x
@@ -18,19 +23,28 @@
 #include <Adafruit_NeoPixel.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+#include <Preferences.h>
 #include <esp_sleep.h>
 #include <driver/gpio.h>
 
 #define DEBUG_MODE      0
 
-// ---------- WLAN / XR18 ----------
-#define WIFI_SSID       "XR18-19-1B-07"  // SSID des XR18 (Access-Point-Modus) bzw. des Band-Routers
-#define WIFI_PASS       ""               // XR18-AP ist ab Werk offen; im Client-Modus: WLAN-Passwort
-#define XR18_IP         "192.168.1.1"    // im AP-Modus hat das XR18 immer 192.168.1.1
+// ---------- Werkseinstellungen (per Weboberfläche änderbar, in NVS gespeichert) ----------
+#define DEF_WIFI_SSID   "XR18-19-1B-07"  // SSID des XR18 (Access-Point-Modus) bzw. des Band-Routers
+#define DEF_WIFI_PASS   ""               // XR18-AP ist ab Werk offen; im Client-Modus: WLAN-Passwort
+#define DEF_XR18_IP     "192.168.1.1"    // im AP-Modus hat das XR18 immer 192.168.1.1
+#define DEF_BASS1_CH    1                // Mixer-Kanal Bass 1 (1..16)
+#define DEF_BASS2_CH    2                // Mixer-Kanal Bass 2 (1..16)
+
 #define XR18_PORT       10024            // OSC-Port der X-AIR-Serie (X32 nutzt 10023)
-#define BASS1_CH        1                // Mixer-Kanal Bass 1 (1..16)
-#define BASS2_CH        2                // Mixer-Kanal Bass 2 (1..16)
 #define XREMOTE_MS      8000             // /xremote hält ~10 s – rechtzeitig erneuern
+
+// ---------- Setup-Access-Point (Fallback / Ersteinrichtung) ----------
+#define AP_SSID         "DaTurn-Setup"
+#define AP_PASS         "daturn123"
+#define STA_TIMEOUT_MS  30000            // WLAN nach 30 s nicht da -> Setup-AP zusätzlich starten
 
 // ---------- Pins (GPIO-Nummern, XIAO-Beschriftung im Kommentar) ----------
 #define RGBW_PIN        10                      // D10 – DIN der RGBW-LED
@@ -65,11 +79,20 @@ Pedal pedals[] = {
 };
 const size_t PEDAL_COUNT = sizeof(pedals) / sizeof(pedals[0]);
 
+struct Config {
+  String  ssid;
+  String  pass;
+  String  xr18Ip;
+  uint8_t ch1;
+  uint8_t ch2;
+} cfg;
+
 BleKeyboard bleKeyboard("DaTurn", "DPommranz", 100);
 Adafruit_NeoPixel pixels(NUM_PIXELS, RGBW_PIN, NEO_RGBW + NEO_KHZ800);
 WiFiUDP udp;
+WebServer server(80);
+Preferences prefs;
 
-const uint8_t bassCh[2] = { BASS1_CH, BASS2_CH };
 RTC_DATA_ATTR uint8_t selectedBass = 0;   // 0 = Bass 1, 1 = Bass 2; überlebt den Deep Sleep
 bool chMuted[2] = { true, true };         // lokales Abbild von /ch/xx/mix/on (wird vom Mixer synchronisiert)
 
@@ -78,6 +101,31 @@ uint32_t flashUntilMs   = 0;
 uint8_t  flashR, flashG, flashB, flashW;
 uint32_t lastActivityMs = 0;
 uint32_t lastXremoteMs  = 0;
+bool     apActive       = false;
+
+uint8_t bassChannel(uint8_t idx) { return idx == 0 ? cfg.ch1 : cfg.ch2; }
+
+// ---------- Konfiguration (NVS) ----------
+
+void loadConfig() {
+  prefs.begin("daturn", true);
+  cfg.ssid   = prefs.getString("ssid", DEF_WIFI_SSID);
+  cfg.pass   = prefs.getString("pass", DEF_WIFI_PASS);
+  cfg.xr18Ip = prefs.getString("ip",   DEF_XR18_IP);
+  cfg.ch1    = prefs.getUChar("ch1", DEF_BASS1_CH);
+  cfg.ch2    = prefs.getUChar("ch2", DEF_BASS2_CH);
+  prefs.end();
+}
+
+void saveConfig() {
+  prefs.begin("daturn", false);
+  prefs.putString("ssid", cfg.ssid);
+  prefs.putString("pass", cfg.pass);
+  prefs.putString("ip",   cfg.xr18Ip);
+  prefs.putUChar("ch1", cfg.ch1);
+  prefs.putUChar("ch2", cfg.ch2);
+  prefs.end();
+}
 
 // ---------- LED ----------
 
@@ -140,7 +188,7 @@ void oscSend(const char *addr, const int32_t *value) {
     buf[len++] = (*value >>  8) & 0xFF;
     buf[len++] =  *value        & 0xFF;
   }
-  udp.beginPacket(XR18_IP, XR18_PORT);
+  udp.beginPacket(cfg.xr18Ip.c_str(), XR18_PORT);
   udp.write(buf, len);
   udp.endPacket();
 }
@@ -152,7 +200,7 @@ void chOnAddress(char *out, uint8_t ch) {
 // /ch/xx/mix/on: 1 = Kanal an, 0 = gemutet
 void sendChOn(uint8_t bassIdx, bool on) {
   char addr[20];
-  chOnAddress(addr, bassCh[bassIdx]);
+  chOnAddress(addr, bassChannel(bassIdx));
   const int32_t v = on ? 1 : 0;
   oscSend(addr, &v);
   if (DEBUG_MODE) { Serial.print(addr); Serial.println(on ? " 1" : " 0"); }
@@ -170,7 +218,7 @@ void oscPoll() {
 
     for (uint8_t i = 0; i < 2; i++) {
       char expect[20];
-      chOnAddress(expect, bassCh[i]);
+      chOnAddress(expect, bassChannel(i));
       if (strcmp(addr, expect) != 0) continue;
 
       size_t p = strlen(addr) + 1;
@@ -193,7 +241,7 @@ void oscTick(uint32_t now) {
     oscSend("/xremote", nullptr);              // Updates abonnieren (hält ~10 s)
     for (uint8_t i = 0; i < 2; i++) {          // Zustände zusätzlich aktiv abfragen
       char addr[20];
-      chOnAddress(addr, bassCh[i]);
+      chOnAddress(addr, bassChannel(i));
       oscSend(addr, nullptr);
     }
   }
@@ -237,6 +285,98 @@ void triggerPedal(Pedal &p, uint32_t now) {
   }
 }
 
+// ---------- Weboberfläche ----------
+
+String htmlEscape(const String &s) {
+  String out;
+  out.reserve(s.length());
+  for (size_t i = 0; i < s.length(); i++) {
+    switch (s[i]) {
+      case '&':  out += "&amp;";  break;
+      case '<':  out += "&lt;";   break;
+      case '>':  out += "&gt;";   break;
+      case '"':  out += "&quot;"; break;
+      default:   out += s[i];
+    }
+  }
+  return out;
+}
+
+void handleRoot() {
+  lastActivityMs = millis();
+
+  String wifiState = (WiFi.status() == WL_CONNECTED)
+    ? "verbunden mit " + htmlEscape(WiFi.SSID()) + " (" + WiFi.localIP().toString() + ")"
+    : "nicht verbunden";
+  if (apActive) wifiState += " – Setup-AP aktiv";
+
+  String h;
+  h.reserve(3000);
+  h += F("<!DOCTYPE html><html lang='de'><head><meta charset='utf-8'>"
+         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+         "<title>DaTurn Setup</title><style>"
+         "body{font-family:system-ui,sans-serif;margin:0;background:#111;color:#eee}"
+         "main{max-width:26rem;margin:0 auto;padding:1rem}"
+         "h1{font-size:1.4rem}h2{font-size:1rem;margin-top:1.5rem}"
+         ".card{background:#1d1d1f;border-radius:12px;padding:1rem;margin:.8rem 0}"
+         "label{display:block;margin:.7rem 0 .2rem;font-size:.9rem;color:#aaa}"
+         "input{width:100%;box-sizing:border-box;font-size:1.1rem;padding:.6rem;"
+         "border-radius:8px;border:1px solid #444;background:#2a2a2d;color:#eee}"
+         "button{width:100%;margin-top:1.2rem;font-size:1.1rem;padding:.8rem;"
+         "border-radius:8px;border:0;background:#2563eb;color:#fff}"
+         ".st td{padding:.15rem .5rem .15rem 0;font-size:.95rem}"
+         "</style></head><body><main><h1>DaTurn</h1>");
+
+  h += F("<div class='card'><h2 style='margin-top:0'>Status</h2><table class='st'>");
+  h += "<tr><td>WLAN</td><td>" + wifiState + "</td></tr>";
+  h += String("<tr><td>BLE</td><td>") + (bleKeyboard.isConnected() ? "verbunden" : "nicht verbunden") + "</td></tr>";
+  h += "<tr><td>Gew&auml;hlt</td><td>Bass " + String(selectedBass + 1) +
+       " (Kanal " + String(bassChannel(selectedBass)) + ")</td></tr>";
+  h += String("<tr><td>Mute</td><td>Bass 1: ") + (chMuted[0] ? "stumm" : "an") +
+       " &middot; Bass 2: " + (chMuted[1] ? "stumm" : "an") + "</td></tr>";
+  h += F("</table></div>");
+
+  h += F("<form method='POST' action='/save'><div class='card'>"
+         "<h2 style='margin-top:0'>WLAN / Mixer</h2>");
+  h += "<label>WLAN-Name (SSID)</label><input name='ssid' value='" + htmlEscape(cfg.ssid) + "'>";
+  h += "<label>WLAN-Passwort (leer = offen)</label><input name='pass' value='" + htmlEscape(cfg.pass) + "'>";
+  h += "<label>XR18-IP-Adresse</label><input name='ip' value='" + htmlEscape(cfg.xr18Ip) + "'>";
+  h += F("</div><div class='card'><h2 style='margin-top:0'>Kan&auml;le</h2>");
+  h += "<label>Mixer-Kanal Bass 1</label><input name='ch1' type='number' min='1' max='16' value='" + String(cfg.ch1) + "'>";
+  h += "<label>Mixer-Kanal Bass 2</label><input name='ch2' type='number' min='1' max='16' value='" + String(cfg.ch2) + "'>";
+  h += F("</div><button type='submit'>Speichern &amp; Neustart</button></form>"
+         "</main></body></html>");
+
+  server.send(200, "text/html", h);
+}
+
+void handleSave() {
+  lastActivityMs = millis();
+
+  cfg.ssid   = server.arg("ssid");
+  cfg.pass   = server.arg("pass");
+  cfg.xr18Ip = server.arg("ip");
+  cfg.ch1    = constrain(server.arg("ch1").toInt(), 1, 16);
+  cfg.ch2    = constrain(server.arg("ch2").toInt(), 1, 16);
+  saveConfig();
+
+  server.send(200, "text/html",
+    F("<!DOCTYPE html><html lang='de'><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+      "<body style='font-family:system-ui;background:#111;color:#eee;text-align:center;padding-top:3rem'>"
+      "<h1>Gespeichert</h1><p>DaTurn startet neu &ndash; danach ggf. neu verbinden.</p></body></html>"));
+  delay(500);
+  ESP.restart();
+}
+
+void startAp() {
+  if (apActive) return;
+  WiFi.mode(WIFI_AP_STA);                      // STA versucht parallel weiter zu verbinden
+  WiFi.softAP(AP_SSID, AP_PASS);
+  apActive = true;
+  if (DEBUG_MODE) { Serial.print("Setup-AP: "); Serial.println(WiFi.softAPIP()); }
+}
+
 // ---------- Deep Sleep ----------
 
 void goToSleep() {
@@ -260,9 +400,14 @@ void setup() {
   Serial.begin(115200);
   if (DEBUG_MODE) Serial.println("DaTurn (XIAO ESP32C3) starting");
 
+  loadConfig();
+
   for (size_t i = 0; i < PEDAL_COUNT; i++) {
     pinMode(pedals[i].pin, INPUT_PULLUP);
   }
+  delay(10);
+  // Pedal 4 (ganz rechts) beim Einschalten gehalten -> Setup-AP sofort starten
+  const bool forceAp = (digitalRead(pedals[PEDAL_COUNT - 1].pin) == LOW);
 
   pixels.begin();
   pixels.clear();
@@ -272,8 +417,18 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);            // nicht blockierend, Status wird im Loop geprüft
+  if (cfg.ssid.length() > 0) {
+    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());  // nicht blockierend
+  }
+  if (forceAp || cfg.ssid.length() == 0) startAp();
   udp.begin(XR18_PORT);
+
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/save", HTTP_POST, handleSave);
+  server.onNotFound([]() { server.sendHeader("Location", "/"); server.send(302); });
+  server.begin();
+  MDNS.begin("daturn");                        // -> http://daturn.local
+  MDNS.addService("http", "tcp", 80);
 
   lastActivityMs = millis();
 }
@@ -297,11 +452,19 @@ void loop() {
     }
   }
 
+  // Konfiguriertes WLAN dauerhaft nicht erreichbar -> Setup-AP zusätzlich anbieten
+  if (!apActive && WiFi.status() != WL_CONNECTED && now >= STA_TIMEOUT_MS) startAp();
+
+  server.handleClient();
   oscTick(now);
   updateLed(now, bleKeyboard.isConnected());
 
 #if IDLE_SLEEP_MS > 0
-  if ((now - lastActivityMs) >= IDLE_SLEEP_MS) goToSleep();
+  // Nicht einschlafen, solange jemand auf dem Setup-AP hängt
+  if ((now - lastActivityMs) >= IDLE_SLEEP_MS &&
+      (!apActive || WiFi.softAPgetStationNum() == 0)) {
+    goToSleep();
+  }
 #endif
 
   delay(2);

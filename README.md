@@ -71,14 +71,40 @@ Neu hinzugekommen (nur für die zwei neuen Funktionen):
 Der Sketch implementiert OSC minimal selbst (UDP-Pakete von Hand gebaut) – es ist also
 **keine zusätzliche OSC-Bibliothek** nötig.
 
-## Konfiguration im Sketch
+## Konfiguration per Handy (Weboberfläche)
+
+Der ESP32 hostet eine kleine mobile Konfig-Seite (WLAN-Zugangsdaten, XR18-IP, beide
+Kanalnummern plus Status-Anzeige). Die Einstellungen landen im Flash (NVS) und
+überleben Neustart und Deep Sleep; die `DEF_*`-Defines im Sketch sind nur noch die
+Werkseinstellungen.
+
+**Normalbetrieb (empfohlen):** Der ESP hängt als Client im XR18-WLAN. Handy einfach
+im selben XR18-WLAN lassen und **http://daturn.local** öffnen (falls der Handy-Browser
+mDNS nicht auflöst: die IP des ESP steht im seriellen Monitor bzw. in der Client-Liste
+des Routers). So erreicht das Handy gleichzeitig die X-AIR-App **und** die Konfig-Seite –
+kein Umschalten nötig.
+
+**Setup-Access-Point (Ersteinrichtung/Fallback):** Wenn das konfigurierte WLAN nicht
+erreichbar ist (30 s Timeout) oder **Pedal 4 beim Einschalten gehalten** wird, spannt
+der ESP zusätzlich ein eigenes WLAN auf:
+
+- SSID `DaTurn-Setup`, Passwort `daturn123`, Seite: **http://192.168.4.1**
+
+Zum Konflikt mit dem XR18: Die beiden Funknetze stören sich nicht (verschiedene SSIDs;
+läuft der ESP gleichzeitig als Client + AP, teilen sich beide sogar denselben Kanal).
+Der praktische Haken ist das **Handy**: Es kann nur in einem WLAN gleichzeitig sein –
+hängt es am `DaTurn-Setup`-AP, erreicht es das Mischpult (X-AIR-App) nicht. Deshalb ist
+der AP nur Fallback und die Konfig-Seite läuft normalerweise im XR18-WLAN mit.
+Solange ein Gerät mit dem Setup-AP verbunden ist, geht der ESP nicht in den Deep Sleep.
+
+Werkseinstellungen im Sketch:
 
 ```cpp
-#define WIFI_SSID  "XR18-19-1B-07"  // SSID des XR18-Access-Points (steht auf dem Gerät/im Setup)
-#define WIFI_PASS  ""               // AP-Modus ab Werk offen
-#define XR18_IP    "192.168.1.1"    // AP-Modus: immer 192.168.1.1
-#define BASS1_CH   1                // Mixer-Kanal Bass 1
-#define BASS2_CH   2                // Mixer-Kanal Bass 2
+#define DEF_WIFI_SSID  "XR18-19-1B-07"  // SSID des XR18-Access-Points (steht auf dem Gerät/im Setup)
+#define DEF_WIFI_PASS  ""               // AP-Modus ab Werk offen
+#define DEF_XR18_IP    "192.168.1.1"    // AP-Modus: immer 192.168.1.1
+#define DEF_BASS1_CH   1                // Mixer-Kanal Bass 1
+#define DEF_BASS2_CH   2                // Mixer-Kanal Bass 2
 ```
 
 BLE (Umblättern) und WLAN (Mixer) laufen gleichzeitig – der ESP32-C3 teilt sich ein Funkmodul
