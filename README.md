@@ -167,22 +167,26 @@ erkennt automatisch, welches Board angeschlossen ist.
 | Pedal 2 (Pfeil links) | 5 |
 | Pedal 3 (Pfeil rechts) | 6 |
 | Pedal 4 (ganz rechts, Mute) | 7 |
-| Status-LED | Onboard-RGB-LED (GPIO 38) |
+| Externe RGBW-Status-LED (optional, DIN) | 11 |
 
 Pedale wieder gegen **GND** (interne Pull-ups). Besonderheiten:
 
+- Das Board hat **keine eigene RGB-LED** – als Status-LED kann optional die RGBW-LED
+  aus dem XIAO-Aufbau an GPIO 11 weiterverwendet werden (gleiche Farblogik). Ohne LED
+  läuft alles normal, das Display zeigt den Status ja ohnehin an.
+- **Display:** Die Touch-Variante nutzt einen JD9853-Controller mit eigener Verdrahtung
+  (SCK=38, MOSI=39, CS=21, DC=45, RST=40, Backlight=46; GPIO 41/42/47/48 gehören dem
+  Touch-Chip). Angesteuert wird es wie im Waveshare-Demo über **Arduino_GFX** mit dem
+  ST7789-Treiber (Offsets 34/0).
 - **Aufwecken aus dem Deep Sleep nur über Pedal 1** (der esp32-Core 2.x kann beim S3
   nur einen einzelnen Wakeup-Pin). Display und LED gehen im Deep Sleep aus.
-- Die Onboard-LED ist RGB ohne Weiß-Kanal – der Weiß-Blitz („Kanal A gewählt“) wird
-  als Weiß aus R+G+B gemischt, Farblogik sonst unverändert.
 - **Akku:** 3,7-V-LiPo an den Akku-Anschluss des Boards (bzw. VBAT-Pin), Laden über USB-C
   übernimmt das Board. Akkustands-Anzeige per `setBatteryLevel()` ist vorbereitet,
   sobald der Mess-GPIO des Boards verifiziert ist (siehe Waveshare-Wiki).
 - Arduino IDE: Board **ESP32S3 Dev Module** wählen (Flash Size 16MB, PSRAM „OPI PSRAM“,
-  Partition Scheme „Huge App“, USB CDC On Boot Enabled), zusätzlich **TFT_eSPI**
-  installieren und dessen `User_Setup.h` durch `DaTurn_S3/User_Setup_DaTurn_S3.h`
-  ersetzen (wichtig: `USE_HSPI_PORT`, sonst bleibt das Display schwarz).
-  Der CI-Build setzt das alles automatisch.
+  Partition Scheme „Huge App“, USB CDC On Boot Enabled), zusätzlich die Bibliothek
+  **„GFX Library for Arduino“** (Arduino_GFX) über den Bibliotheksverwalter installieren –
+  keine weitere Konfiguration nötig. Der CI-Build macht das automatisch.
 
 ## Weitere Hinweise
 

@@ -34,7 +34,7 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.17
           arduino-cli lib install "Adafruit NeoPixel"
-          arduino-cli lib install "TFT_eSPI"
+          arduino-cli lib install "GFX Library for Arduino"
           mkdir -p ~/Arduino/libraries
           git clone --depth 1 https://github.com/T-vK/ESP32-BLE-Keyboard ~/Arduino/libraries/ESP32-BLE-Keyboard
 
@@ -45,13 +45,10 @@ jobs:
             --output-dir build \
             DaTurn
 
-      # TFT_eSPI wird komplett über Compiler-Flags konfiguriert (entspricht
-      # DaTurn_S3/User_Setup_DaTurn_S3.h) – USE_HSPI_PORT ist Pflicht.
       - name: Sketch kompilieren (Waveshare ESP32-S3-Touch-LCD-1.47)
         run: |
           arduino-cli compile \
             --fqbn esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=huge_app,CDCOnBoot=cdc \
-            --build-property "compiler.cpp.extra_flags=-DUSER_SETUP_LOADED=1 -DST7789_DRIVER=1 -DTFT_WIDTH=172 -DTFT_HEIGHT=320 -DTFT_MOSI=45 -DTFT_SCLK=40 -DTFT_CS=42 -DTFT_DC=41 -DTFT_RST=39 -DTFT_BL=48 -DTFT_BACKLIGHT_ON=1 -DTFT_RGB_ORDER=1 -DUSE_HSPI_PORT=1 -DLOAD_GLCD=1 -DLOAD_FONT2=1 -DLOAD_FONT4=1 -DSPI_FREQUENCY=8000000" \
             --output-dir build-s3 \
             DaTurn_S3
 

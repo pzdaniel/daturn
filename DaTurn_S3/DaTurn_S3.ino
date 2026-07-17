@@ -1,6 +1,6 @@
 /*
  * DaTurn-S3 – BLE-Fußschalter + Behringer-XR18-Fernsteuerung mit Display
- * Für Waveshare ESP32-S3-Touch-LCD-1.47 (1,47"-ST7789-Display, 172x320)
+ * Für Waveshare ESP32-S3-Touch-LCD-1.47 (1,47"-Display 172x320, JD9853-Controller)
  *
  * Pedal-Belegung (von links nach rechts), Pedale gegen GND an den Pinheader:
  *   1 (GPIO 4): Umschalter Mixer-Kanal A <-> B   (OSC an XR18 über WLAN)
@@ -9,8 +9,12 @@
  *   4 (GPIO 7): Mute/Unmute des gewählten Kanals (OSC an XR18 über WLAN)
  *
  * Das Display zeigt den aktiven Kanal (A/B), Mute- und Verbindungsstatus.
- * Status-LED ist die Onboard-RGB-LED (GPIO 38) – Farblogik wie gehabt,
- * der Weiß-Kanal der alten RGBW-LED wird auf RGB gemischt.
+ * Optionale externe RGBW-Status-LED (z. B. die aus dem XIAO-Aufbau) an GPIO 11 –
+ * das Board hat keine eigene RGB-LED; ohne LED läuft alles normal weiter.
+ *
+ * LCD-Verdrahtung der Touch-Variante (JD9853, ST7789-kompatibles Init):
+ *   SCK=38, MOSI=39, CS=21, DC=45, RST=40, Backlight=46
+ *   (GPIO 41/42/47/48 gehören dem Touch-Controller AXS5106L)
  *
  * Aufwecken aus dem Deep Sleep: nur über Pedal 1 (ganz links) –
  * der esp32-Core 2.x kann beim S3 nur einen einzelnen EXT0-Wakeup-Pin.
@@ -18,12 +22,12 @@
  * Benötigte Bibliotheken (Details siehe README.md):
  *   - ESP32-BLE-Keyboard (T-vK), esp32-Core 2.0.17 (Core 3.x bootloopt, siehe README)
  *   - Adafruit NeoPixel
- *   - TFT_eSPI mit dem Setup aus User_Setup_DaTurn_S3.h
+ *   - GFX Library for Arduino (Arduino_GFX, wie im Waveshare-Demo)
  */
 
 #include <BleKeyboard.h>
 #include <Adafruit_NeoPixel.h>
-#include <TFT_eSPI.h>
+#include <Arduino_GFX_Library.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <WebServer.h>
@@ -54,9 +58,9 @@ const IPAddress AP_IP(4, 4, 4, 4);
 const IPAddress AP_MASK(255, 255, 255, 0);
 
 // ---------- Pins (Waveshare ESP32-S3-Touch-LCD-1.47) ----------
-#define RGB_PIN         38                      // Onboard-WS2812-RGB-LED
+#define RGBW_PIN        11                      // optionale externe RGBW-LED (DIN), frei am Header
 #define NUM_PIXELS      1
-#define PIN_LCD_BL      48                      // Display-Hintergrundbeleuchtung
+#define PIN_LCD_BL      46                      // Display-Hintergrundbeleuchtung
 
 // ---------- Verhalten ----------
 #define DEBOUNCE_MS     25                      // Entprellzeit der Pedale
@@ -94,8 +98,12 @@ struct Config {
 } cfg;
 
 BleKeyboard bleKeyboard("DaTurn", "DPommranz", 100);
-Adafruit_NeoPixel pixels(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
-TFT_eSPI tft;
+Adafruit_NeoPixel pixels(NUM_PIXELS, RGBW_PIN, NEO_RGBW + NEO_KHZ800);
+// Display-Anbindung exakt wie im Waveshare-Arduino-Demo (Arduino_GFX):
+// JD9853-Panel läuft mit dem ST7789-Treiber, Offsets 34/0 wegen 172 px Breite
+Arduino_DataBus *bus = new Arduino_ESP32SPI(45 /* DC */, 21 /* CS */, 38 /* SCK */, 39 /* MOSI */, GFX_NOT_DEFINED /* MISO */);
+Arduino_GFX *gfx = new Arduino_ST7789(bus, 40 /* RST */, 1 /* Rotation: Querformat */, false /* IPS */,
+                                      172, 320, 34, 0, 34, 0);
 WiFiUDP udp;
 WebServer server(80);
 Preferences prefs;
@@ -137,11 +145,7 @@ void saveConfig() {
 // ---------- LED ----------
 
 void setLed(uint8_t r, uint8_t g, uint8_t b, uint8_t w = 0) {
-  // Onboard-LED ist RGB ohne Weiß-Kanal – Weiß-Anteil gleichmäßig zumischen
-  const uint8_t rr = (uint8_t)min(255, (int)r + w);
-  const uint8_t gg = (uint8_t)min(255, (int)g + w);
-  const uint8_t bb = (uint8_t)min(255, (int)b + w);
-  const uint32_t c = pixels.Color(rr, gg, bb);
+  const uint32_t c = pixels.Color(r, g, b, w);
   if (c == currentColor) return;          // nur bei Änderung wirklich senden
   currentColor = c;
   pixels.setPixelColor(0, c);
@@ -179,6 +183,14 @@ void updateLed(uint32_t now, bool bleConnected) {
 
 // ---------- Display ----------
 
+// RGB565-Farben
+#define COL_BLACK  0x0000
+#define COL_RED    0xF800
+#define COL_GREEN  0x07E0
+#define COL_YELLOW 0xFFE0
+#define COL_WHITE  0xFFFF
+#define COL_GREY   0x7BEF
+
 struct UiState {
   bool    ble;
   bool    wifi;
@@ -188,6 +200,13 @@ struct UiState {
   bool    mutedB;
 };
 UiState drawnUi = { false, false, false, 255, true, true };  // ch=255 erzwingt ersten Draw
+
+void drawText(int16_t x, int16_t y, uint8_t size, uint16_t color, const String &s) {
+  gfx->setTextSize(size);
+  gfx->setTextColor(color);
+  gfx->setCursor(x, y);
+  gfx->print(s);
+}
 
 void updateDisplay() {
   UiState ui;
@@ -202,41 +221,23 @@ void updateDisplay() {
 
   const bool muted = (ui.ch == 0) ? ui.mutedA : ui.mutedB;
 
-  tft.fillScreen(TFT_BLACK);
+  gfx->fillScreen(COL_BLACK);
 
-  // Kopfzeile: Verbindungsstatus
-  tft.setTextSize(1);
-  tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(ui.ble ? TFT_GREEN : TFT_RED, TFT_BLACK);
-  tft.drawString("BLE", 8, 8, 2);
-  tft.setTextColor(ui.wifi ? TFT_GREEN : TFT_RED, TFT_BLACK);
-  tft.drawString("WLAN", 48, 8, 2);
-  if (ui.ap) {
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft.drawString("SETUP-AP", 108, 8, 2);
-  }
-  tft.setTextDatum(TR_DATUM);
-  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-  tft.drawString("DaTurn", 312, 8, 2);
+  // Kopfzeile: Verbindungsstatus (Querformat 320x172)
+  drawText(8,   8, 2, ui.ble  ? COL_GREEN : COL_RED, "BLE");
+  drawText(56,  8, 2, ui.wifi ? COL_GREEN : COL_RED, "WLAN");
+  if (ui.ap) drawText(128, 8, 2, COL_YELLOW, "SETUP-AP");
+  drawText(240, 8, 2, COL_GREY, "DaTurn");
 
   // Großer Kanalbuchstabe links, Details rechts
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextSize(4);
-  tft.setTextColor(muted ? TFT_RED : TFT_GREEN, TFT_BLACK);
-  tft.drawString(ui.ch == 0 ? "A" : "B", 84, 92, 4);
-  tft.setTextSize(1);
-
-  tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.drawString("Kanal " + String(mixerChannel(ui.ch)), 168, 62, 4);
-  tft.setTextColor(muted ? TFT_RED : TFT_GREEN, TFT_BLACK);
-  tft.drawString(muted ? "STUMM" : "AN", 168, 94, 4);
+  drawText(36, 44, 12, muted ? COL_RED : COL_GREEN, ui.ch == 0 ? "A" : "B");
+  drawText(150, 64, 3, COL_WHITE, "Kanal " + String(mixerChannel(ui.ch)));
+  drawText(150, 100, 3, muted ? COL_RED : COL_GREEN, muted ? "STUMM" : "AN");
 
   // Fußzeile
-  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-  if (ui.ap)        tft.drawString("Setup: http://4.4.4.4", 8, 148, 2);
-  else if (ui.wifi) tft.drawString("http://" + WiFi.localIP().toString(), 8, 148, 2);
-  else              tft.drawString("suche WLAN ...", 8, 148, 2);
+  if (ui.ap)        drawText(8, 152, 2, COL_GREY, "Setup: http://4.4.4.4");
+  else if (ui.wifi) drawText(8, 152, 2, COL_GREY, "http://" + WiFi.localIP().toString());
+  else              drawText(8, 152, 2, COL_GREY, "suche WLAN ...");
 }
 
 // ---------- OSC (minimal, ohne Zusatzbibliothek) ----------
@@ -488,10 +489,9 @@ void setup() {
   pixels.clear();
   pixels.show();
 
-  tft.init();
-  tft.setRotation(1);                          // Querformat 320x172, USB rechts
-  tft.fillScreen(TFT_BLACK);
-  digitalWrite(PIN_LCD_BL, HIGH);
+  gfx->begin();
+  gfx->fillScreen(COL_BLACK);
+  digitalWrite(PIN_LCD_BL, HIGH);              // Hintergrundbeleuchtung an
 
   bleKeyboard.begin();
 
