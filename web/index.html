@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DaTurn Web-Installer</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #111; color: #eee; }
+    main { max-width: 34rem; margin: 0 auto; padding: 2rem 1rem; }
+    h1 { font-size: 1.6rem; }
+    .card { background: #1d1d1f; border-radius: 12px; padding: 1.2rem; margin: 1rem 0; }
+    ol { padding-left: 1.2rem; } li { margin: .4rem 0; }
+    a { color: #7ab4ff; }
+    esp-web-install-button { --esp-tools-button-color: #2563eb; }
+    .hint { color: #aaa; font-size: .9rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>DaTurn – Web-Installer</h1>
+  <p>BLE-Fußschalter + Behringer-XR18-Fernsteuerung für den Seeed Studio XIAO ESP32C3.</p>
+
+  <div class="card">
+    <ol>
+      <li>XIAO ESP32C3 per USB-C an den PC anschließen.</li>
+      <li>Auf „Installieren“ klicken und den seriellen Port auswählen.</li>
+      <li>Falls kein Port erscheint: BOOT-Taste („B“) gedrückt halten, während man den XIAO einsteckt.</li>
+    </ol>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Installieren</button>
+      <span slot="unsupported">Dieser Browser kann kein Web-Serial – bitte Chrome oder Edge am PC/Mac verwenden.</span>
+      <span slot="not-allowed">Web-Serial ist nur über HTTPS erlaubt.</span>
+    </esp-web-install-button>
+    <p class="hint">Funktioniert in Chrome/Edge am Desktop (Web-Serial). Am Handy/iPad geht Flashen nicht –
+      die Konfiguration danach aber schon (Setup-WLAN „DaTurn-Setup“, Seite http://4.4.4.4).</p>
+  </div>
+
+  <p><a href="https://github.com/pzdaniel/daturn">Quellcode &amp; Anleitung auf GitHub</a></p>
+</main>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</body>
+</html>

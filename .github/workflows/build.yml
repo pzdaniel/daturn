@@ -1,0 +1,76 @@
+name: Firmware bauen & Web-Installer deployen
+
+on:
+  push:
+    branches: [main, master, claude/arduino-esp32-migration-kph6m4]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: arduino-cli installieren
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: ESP32-Core und Bibliotheken installieren
+        run: |
+          arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install "Adafruit NeoPixel"
+          arduino-cli lib install "NimBLE-Arduino@1.4.3"
+          mkdir -p ~/Arduino/libraries
+          git clone --depth 1 https://github.com/T-vK/ESP32-BLE-Keyboard ~/Arduino/libraries/ESP32-BLE-Keyboard
+
+      - name: Sketch kompilieren (XIAO ESP32C3, NimBLE)
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:XIAO_ESP32C3:CDCOnBoot=cdc \
+            --build-property "compiler.cpp.extra_flags=-DUSE_NIMBLE" \
+            --output-dir build \
+            DaTurn
+
+      - name: Installer-Seite zusammenstellen
+        run: |
+          mkdir -p site
+          cp web/index.html site/
+          sed "s/__VERSION__/build-${GITHUB_RUN_NUMBER}/" web/manifest.json > site/manifest.json
+          cp build/DaTurn.ino.bootloader.bin site/bootloader.bin
+          cp build/DaTurn.ino.partitions.bin site/partitions.bin
+          cp build/DaTurn.ino.bin           site/firmware.bin
+          cp "$(find ~/.arduino15/packages/esp32/hardware/esp32 -name boot_app0.bin | head -1)" site/boot_app0.bin
+          ls -la site
+
+      - name: Firmware als Artefakt sichern
+        uses: actions/upload-artifact@v4
+        with:
+          name: daturn-firmware
+          path: site/*.bin
+
+      - name: GitHub Pages konfigurieren
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Pages-Artefakt hochladen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Auf GitHub Pages deployen
+        id: deployment
+        uses: actions/deploy-pages@v4
