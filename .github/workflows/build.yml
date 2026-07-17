@@ -34,7 +34,7 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.17
           arduino-cli lib install "Adafruit NeoPixel"
-          arduino-cli lib install "GFX Library for Arduino"
+          arduino-cli lib install "GFX Library for Arduino@1.4.9"
           mkdir -p ~/Arduino/libraries
           git clone --depth 1 https://github.com/T-vK/ESP32-BLE-Keyboard ~/Arduino/libraries/ESP32-BLE-Keyboard
 

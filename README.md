@@ -185,7 +185,8 @@ Pedale wieder gegen **GND** (interne Pull-ups). Besonderheiten:
   sobald der Mess-GPIO des Boards verifiziert ist (siehe Waveshare-Wiki).
 - Arduino IDE: Board **ESP32S3 Dev Module** wählen (Flash Size 16MB, PSRAM „OPI PSRAM“,
   Partition Scheme „Huge App“, USB CDC On Boot Enabled), zusätzlich die Bibliothek
-  **„GFX Library for Arduino“** (Arduino_GFX) über den Bibliotheksverwalter installieren –
+  **„GFX Library for Arduino“** (Arduino_GFX) in Version **1.4.9** über den
+  Bibliotheksverwalter installieren (neuere Versionen brauchen den esp32-Core 3.x) –
   keine weitere Konfiguration nötig. Der CI-Build macht das automatisch.
 
 ## Weitere Hinweise
