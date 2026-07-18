@@ -128,8 +128,12 @@ BLE-Verbindung.
 1. **Board-Paket:** `esp32` von Espressif, **Version 2.0.17** (im Boardverwalter über das
    Versions-Dropdown wählen!). Boardauswahl: *XIAO_ESP32C3*.
    Für den seriellen Monitor ggf. *USB CDC On Boot: Enabled* setzen.
-2. **ESP32-BLE-Keyboard** (T-vK): als ZIP von GitHub installieren – unverändert lassen
-   (`USE_NIMBLE` **nicht** aktivieren).
+2. **ESP32-BLE-Keyboard** (T-vK): als ZIP von GitHub installieren, `USE_NIMBLE`
+   **nicht** aktivieren. Ein Handgriff ist nötig: In `BleKeyboard.cpp` die Zeile mit
+   `ESP_LE_AUTH_BOND` auf `ESP_LE_AUTH_REQ_SC_MITM_BOND` ändern – sonst schlägt das
+   Koppeln auf aktuellen Android-/iOS-Geräten fehl („Gerät nicht bereit“).
+   Der CI-Build patcht das automatisch.
+   Tipp bei Kopplungsproblemen: alte „DaTurn“-Kopplung am Gerät entfernen und neu koppeln.
 3. **Adafruit NeoPixel** über den Bibliotheksverwalter.
 
 **Warum Core 2.0.17 und nicht 3.x?** Die ESP32-BLE-Keyboard-Bibliothek ist mit dem
