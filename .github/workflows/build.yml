@@ -37,11 +37,12 @@ jobs:
           arduino-cli lib install "GFX Library for Arduino@1.4.9"
           mkdir -p ~/Arduino/libraries
           git clone --depth 1 https://github.com/T-vK/ESP32-BLE-Keyboard ~/Arduino/libraries/ESP32-BLE-Keyboard
-          # Pairing-Fix: Secure Connections ohne MITM (Just Works) - MITM waere
+          # Pairing-Fix: die Bibliothek fordert ab Werk SC_MITM_BOND an - MITM ist
           # ohne PIN-Eingabemoeglichkeit widerspruechlich und fuehrt auf manchen
-          # Android-Versionen zum Kopplungsabbruch
-          sed -i 's/ESP_LE_AUTH_BOND/ESP_LE_AUTH_REQ_SC_BOND/g' ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
+          # Android-Versionen zum Kopplungsabbruch. Auf SC_BOND (Just Works) umstellen.
+          sed -i 's/ESP_LE_AUTH_REQ_SC_MITM_BOND/ESP_LE_AUTH_REQ_SC_BOND/g' ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
           grep -q "ESP_LE_AUTH_REQ_SC_BOND" ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
+          ! grep -q "SC_MITM_BOND" ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
 
       - name: Sketch kompilieren (XIAO ESP32C3)
         run: |
