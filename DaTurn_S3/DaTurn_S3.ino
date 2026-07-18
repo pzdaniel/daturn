@@ -152,6 +152,7 @@ uint32_t lastXremoteMs  = 0;
 bool     apActive       = false;
 uint32_t lastStaTryMs   = 0;
 bool     staTrying      = false;
+bool     bleTestMode    = false;          // einmaliger Start ohne WLAN (Kopplungstest)
 int8_t   batPct         = -1;             // -1 = kein Akku messbar
 bool     batCharging    = false;
 uint32_t lastBatMs      = 0;
@@ -337,7 +338,8 @@ void updateDisplay() {
   }
 
   // Fußzeile
-  if (ui.ap)        drawText(8, 152, 2, COL_GREY, "Setup: http://4.4.4.4");
+  if (bleTestMode)  drawText(8, 152, 2, COL_YELLOW, "BLE-Test: WLAN aus");
+  else if (ui.ap)   drawText(8, 152, 2, COL_GREY, "Setup: http://4.4.4.4");
   else if (ui.wifi) drawText(8, 152, 2, COL_GREY, "http://" + WiFi.localIP().toString());
   else              drawText(8, 152, 2, COL_GREY, "suche WLAN ...");
 
@@ -527,6 +529,8 @@ void handleRoot() {
   h += "<label>Anzeige-Zeichen Kanal B (A&ndash;Z, 0&ndash;9)</label><input name='lb' maxlength='1' value='" + htmlEscape(cfg.labB) + "'>";
   h += F("</div><div class='card'><h2 style='margin-top:0'>Bluetooth</h2>");
   h += "<label>Ger&auml;tename (nach &Auml;nderung neu koppeln)</label><input name='btname' maxlength='20' value='" + htmlEscape(cfg.btName) + "'>";
+  h += F("<label><input type='checkbox' name='bletest' value='1' style='width:auto'> "
+         "N&auml;chster Start einmalig ohne WLAN (BLE-Kopplungstest)</label>");
   h += F("</div><button type='submit'>Speichern &amp; Neustart</button></form>"
          "</main></body></html>");
 
@@ -549,6 +553,10 @@ void handleSave() {
   cfg.labA   = sanitizeLabel(server.arg("la"), DEF_LABEL_A);
   cfg.labB   = sanitizeLabel(server.arg("lb"), DEF_LABEL_B);
   saveConfig();
+
+  prefs.begin("daturn", false);
+  prefs.putUChar("bletest", server.hasArg("bletest") ? 1 : 0);
+  prefs.end();
 
   server.send(200, "text/html",
     F("<!DOCTYPE html><html lang='de'><head><meta charset='utf-8'>"
@@ -621,6 +629,12 @@ void setup() {
   if (DEBUG_MODE) Serial.println("DaTurn-S3 (Waveshare Touch-LCD-1.47) starting");
 
   loadConfig();
+  // Einmal-Modus "BLE-Test ohne WLAN": Flag lesen und sofort zurücksetzen,
+  // damit der nächste Neustart wieder normal startet
+  prefs.begin("daturn", false);
+  bleTestMode = prefs.getUChar("bletest", 0) == 1;
+  if (bleTestMode) prefs.putUChar("bletest", 0);
+  prefs.end();
 
   for (size_t i = 0; i < PEDAL_COUNT; i++) {
     pinMode(pedals[i].pin, INPUT_PULLUP);
@@ -647,25 +661,29 @@ void setup() {
   bleKeyboard.setName(std::string(cfg.btName.c_str()));
   bleKeyboard.begin();
 
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  if (cfg.ssid.length() > 0) {
-    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());  // nicht blockierend
-  }
-  if (forceAp || cfg.ssid.length() == 0) startAp();
-  udp.begin(XR18_PORT);
+  if (bleTestMode) {
+    WiFi.mode(WIFI_OFF);                       // Funkmodul gehört in diesem Boot allein BLE
+  } else {
+    WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    if (cfg.ssid.length() > 0) {
+      WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());  // nicht blockierend
+    }
+    if (forceAp || cfg.ssid.length() == 0) startAp();
+    udp.begin(XR18_PORT);
 
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/save", HTTP_POST, handleSave);
-  // Unbekannte URLs (auch die Connectivity-Checks der Handys) absolut auf die
-  // Konfig-Seite umleiten – dadurch springt die "Netzwerkanmeldeseite" an
-  server.onNotFound([]() {
-    server.sendHeader("Location", "http://4.4.4.4/");
-    server.send(302);
-  });
-  server.begin();
-  MDNS.begin("daturn");                        // -> http://daturn.local
-  MDNS.addService("http", "tcp", 80);
+    server.on("/", HTTP_GET, handleRoot);
+    server.on("/save", HTTP_POST, handleSave);
+    // Unbekannte URLs (auch die Connectivity-Checks der Handys) absolut auf die
+    // Konfig-Seite umleiten – dadurch springt die "Netzwerkanmeldeseite" an
+    server.onNotFound([]() {
+      server.sendHeader("Location", "http://4.4.4.4/");
+      server.send(302);
+    });
+    server.begin();
+    MDNS.begin("daturn");                      // -> http://daturn.local
+    MDNS.addService("http", "tcp", 80);
+  }
 
   lastActivityMs = millis();
 }
@@ -689,13 +707,15 @@ void loop() {
     }
   }
 
-  // Konfiguriertes WLAN dauerhaft nicht erreichbar -> Setup-AP zusätzlich anbieten
-  if (!apActive && WiFi.status() != WL_CONNECTED && now >= STA_TIMEOUT_MS) startAp();
-  manageSta(now);
+  if (!bleTestMode) {
+    // Konfiguriertes WLAN dauerhaft nicht erreichbar -> Setup-AP zusätzlich anbieten
+    if (!apActive && WiFi.status() != WL_CONNECTED && now >= STA_TIMEOUT_MS) startAp();
+    manageSta(now);
 
-  if (apActive) dnsServer.processNextRequest();
-  server.handleClient();
-  oscTick(now);
+    if (apActive) dnsServer.processNextRequest();
+    server.handleClient();
+    oscTick(now);
+  }
   updateBattery(now);
   updateLed(now, bleKeyboard.isConnected());
   updateDisplay();
