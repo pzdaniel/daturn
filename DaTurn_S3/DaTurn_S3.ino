@@ -130,12 +130,17 @@ bool     apActive       = false;
 uint32_t lastStaTryMs   = 0;
 bool     staTrying      = false;
 int8_t   batPct         = -1;             // -1 = kein Akku messbar
+bool     batCharging    = false;
 uint32_t lastBatMs      = 0;
+float    lastVbat       = 0;
+int8_t   vbatTrend      = 0;              // >0 = Spannung steigt (laden), <0 = fällt
 
 uint8_t mixerChannel(uint8_t idx) { return idx == 0 ? cfg.ch1 : cfg.ch2; }
 
 // Akkuspannung messen, in Prozent umrechnen und ans Tablet melden.
 // Liegt keine plausible Spannung an (kein Akku / kein Teiler), bleibt batPct -1.
+// Laden wird ohne Extra-Hardware erkannt: sicher ab >4,25 V (nur mit externer
+// Speisung möglich) oder über mehrfach steigende Spannung (Trend).
 void updateBattery(uint32_t now) {
   if (lastBatMs != 0 && now - lastBatMs < BAT_CHECK_MS) return;
   lastBatMs = now;
@@ -144,12 +149,28 @@ void updateBattery(uint32_t now) {
   for (int i = 0; i < 8; i++) mv += analogReadMilliVolts(BAT_ADC_PIN);
   const float vbat = (mv / 8) * BAT_DIV_FACTOR / 1000.0f;
 
-  if (vbat < 2.9f || vbat > 4.5f) { batPct = -1; return; }
+  if (vbat < 2.9f || vbat > 4.6f) {
+    batPct = -1;
+    batCharging = false;
+    lastVbat = 0;
+    return;
+  }
+
+  if (lastVbat > 0) {
+    if      (vbat - lastVbat >  0.015f) vbatTrend = min((int8_t)(vbatTrend + 1), (int8_t)3);
+    else if (lastVbat - vbat >  0.015f) vbatTrend = max((int8_t)(vbatTrend - 1), (int8_t)-3);
+  }
+  lastVbat = vbat;
+  batCharging = (vbat >= 4.25f) || (vbatTrend >= 2);
+
   float pct = (vbat - 3.3f) / (4.15f - 3.3f) * 100.0f;       // grobe LiPo-Kennlinie
   pct = constrain(pct, 0.0f, 100.0f);
   batPct = ((int8_t)pct / 5) * 5;                            // 5%-Schritte gegen Flackern
   bleKeyboard.setBatteryLevel(batPct);
-  if (DEBUG_MODE) { Serial.print("VBAT: "); Serial.print(vbat); Serial.print(" V -> "); Serial.print(batPct); Serial.println(" %"); }
+  if (DEBUG_MODE) {
+    Serial.print("VBAT: "); Serial.print(vbat); Serial.print(" V -> ");
+    Serial.print(batPct); Serial.print(" %"); Serial.println(batCharging ? " (laedt)" : "");
+  }
 }
 
 // ---------- Konfiguration (NVS) ----------
@@ -231,8 +252,9 @@ struct UiState {
   bool    mutedA;
   bool    mutedB;
   int8_t  bat;
+  bool    chg;
 };
-UiState drawnUi = { false, false, false, 255, true, true, -2 };  // ch=255 erzwingt ersten Draw
+UiState drawnUi = { false, false, false, 255, true, true, -2, false };  // ch=255 erzwingt ersten Draw
 
 void drawText(int16_t x, int16_t y, uint8_t size, uint16_t color, const String &s) {
   gfx->setTextSize(size);
@@ -250,6 +272,7 @@ void updateDisplay() {
   ui.mutedA = chMuted[0];
   ui.mutedB = chMuted[1];
   ui.bat    = batPct;
+  ui.chg    = batCharging;
   if (memcmp(&ui, &drawnUi, sizeof(ui)) == 0) return;   // nur bei Änderung neu zeichnen
   drawnUi = ui;
 
@@ -261,8 +284,14 @@ void updateDisplay() {
   drawText(8,   8, 2, ui.ble  ? COL_GREEN : COL_RED, "BLE");
   drawText(56,  8, 2, ui.wifi ? COL_GREEN : COL_RED, "WLAN");
   if (ui.ap) drawText(128, 8, 2, COL_YELLOW, "SETUP-AP");
-  if (ui.bat >= 0) drawText(264, 8, 2, ui.bat <= 20 ? COL_RED : COL_GREY, String(ui.bat) + "%");
-  else             drawText(240, 8, 2, COL_GREY, "DaTurn");
+  if (ui.bat >= 0) {
+    // Gelb mit "+" = laedt gerade (extern gespeist)
+    String t = String(ui.bat) + (ui.chg ? "%+" : "%");
+    const uint16_t c = ui.chg ? COL_YELLOW : (ui.bat <= 20 ? COL_RED : COL_GREY);
+    drawText(312 - t.length() * 12, 8, 2, c, t);
+  } else {
+    drawText(240, 8, 2, COL_GREY, "DaTurn");
+  }
 
   // Großer Kanalbuchstabe links, Details rechts
   drawText(36, 44, 12, muted ? COL_RED : COL_GREEN, ui.ch == 0 ? "A" : "B");

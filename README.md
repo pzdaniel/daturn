@@ -193,8 +193,10 @@ Pedale wieder gegen **GND** (interne Pull-ups). Besonderheiten:
   externen Widerstände nötig. Die Firmware misst dort alle 30 s und zeigt den
   Ladestand oben rechts im Display sowie am Tablet (`setBatteryLevel`). Ohne Akku
   wird die Anzeige automatisch ausgeblendet. GPIO 1 nicht anderweitig belegen.
-  Hinweis: Am USB-Kabel zeigt die Messung die Ladespannung (~100 %) – aussagekräftig
-  ist der Wert im Akkubetrieb.
+  **Laden wird angezeigt** (gelbe Prozentzahl mit „+“): erkannt ab >4,25 V bzw. über
+  mehrfach steigende Spannung – die Erkennung kann daher bis ~1 Minute nach dem
+  Ein-/Ausstecken brauchen. Während des Ladens ist die Prozentzahl leicht nach oben
+  verfälscht (Ladespannung).
 - Arduino IDE: Board **ESP32S3 Dev Module** wählen (Flash Size 16MB, PSRAM „OPI PSRAM“,
   Partition Scheme „Huge App“, USB CDC On Boot Enabled), zusätzlich die Bibliothek
   **„GFX Library for Arduino“** (Arduino_GFX) in Version **1.4.9** über den
