@@ -37,15 +37,17 @@ jobs:
           arduino-cli lib install "GFX Library for Arduino@1.4.9"
           mkdir -p ~/Arduino/libraries
           git clone --depth 1 https://github.com/T-vK/ESP32-BLE-Keyboard ~/Arduino/libraries/ESP32-BLE-Keyboard
-          # Pairing-Fix: moderner Secure-Connections-Modus statt Legacy-Bonding,
-          # sonst verweigern aktuelle Android/iOS-Versionen die Kopplung
-          sed -i 's/ESP_LE_AUTH_BOND/ESP_LE_AUTH_REQ_SC_MITM_BOND/g' ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
-          grep -q "ESP_LE_AUTH_REQ_SC_MITM_BOND" ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
+          # Pairing-Fix: Secure Connections ohne MITM (Just Works) - MITM waere
+          # ohne PIN-Eingabemoeglichkeit widerspruechlich und fuehrt auf manchen
+          # Android-Versionen zum Kopplungsabbruch
+          sed -i 's/ESP_LE_AUTH_BOND/ESP_LE_AUTH_REQ_SC_BOND/g' ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
+          grep -q "ESP_LE_AUTH_REQ_SC_BOND" ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
 
       - name: Sketch kompilieren (XIAO ESP32C3)
         run: |
           arduino-cli compile \
             --fqbn esp32:esp32:XIAO_ESP32C3:PartitionScheme=huge_app,CDCOnBoot=cdc \
+            --build-property "compiler.cpp.extra_flags=-DDATURN_BUILD=\"build-${GITHUB_RUN_NUMBER}\"" \
             --output-dir build \
             DaTurn
 
@@ -53,6 +55,7 @@ jobs:
         run: |
           arduino-cli compile \
             --fqbn esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=huge_app,CDCOnBoot=cdc \
+            --build-property "compiler.cpp.extra_flags=-DDATURN_BUILD=\"build-${GITHUB_RUN_NUMBER}\"" \
             --output-dir build-s3 \
             DaTurn_S3
 

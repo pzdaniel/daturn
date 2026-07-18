@@ -36,7 +36,14 @@
     </esp-web-install-button>
     <p class="hint">Funktioniert in Chrome/Edge am Desktop (Web-Serial). Am Handy/iPad geht Flashen nicht –
       die Konfiguration danach aber schon (Setup-WLAN „DaTurn-Setup“, Seite http://4.4.4.4).</p>
+    <p class="hint" id="version">Firmware-Version: wird geladen …</p>
   </div>
+  <script>
+    fetch('manifest.json')
+      .then(function (r) { return r.json(); })
+      .then(function (m) { document.getElementById('version').textContent = 'Firmware-Version: ' + m.version; })
+      .catch(function () { document.getElementById('version').textContent = ''; });
+  </script>
 
   <p><a href="https://github.com/pzdaniel/daturn">Quellcode &amp; Anleitung auf GitHub</a></p>
 </main>

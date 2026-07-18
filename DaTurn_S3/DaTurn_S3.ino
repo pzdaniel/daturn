@@ -54,7 +54,11 @@
 #define AP_SSID         "DaTurn-Setup"
 #define AP_PASS         "daturn4444"
 #define STA_TIMEOUT_MS  30000            // WLAN nach 30 s nicht da -> Setup-AP zusätzlich starten
-#define STA_RETRY_MS    60000            // im AP-Modus: WLAN-Versuch nur noch alle 60 s
+#define STA_RETRY_MS    120000           // im AP-Modus: WLAN-Versuch nur noch alle 2 min
+
+#ifndef DATURN_BUILD
+#define DATURN_BUILD    "dev"            // wird im CI-Build mit der Versionsnummer belegt
+#endif
 // Merk-IP des Setup-AP. Achtung: 4.4.4.4 ist eigentlich eine öffentliche Adresse –
 // falls die Seite am Handy nicht lädt, mobile Daten kurz ausschalten.
 const IPAddress AP_IP(4, 4, 4, 4);
@@ -484,6 +488,7 @@ void handleRoot() {
        " (Mixer-Kanal " + String(mixerChannel(selectedCh)) + ")</td></tr>";
   h += String("<tr><td>Mute</td><td>A: ") + (chMuted[0] ? "stumm" : "an") +
        " &middot; B: " + (chMuted[1] ? "stumm" : "an") + "</td></tr>";
+  h += "<tr><td>Firmware</td><td>" DATURN_BUILD "</td></tr>";
   h += F("</table></div>");
 
   h += F("<form method='POST' action='/save'><div class='card'>"
@@ -544,12 +549,13 @@ void startAp() {
   if (DEBUG_MODE) { Serial.print("Setup-AP: "); Serial.println(WiFi.softAPIP()); }
 }
 
-// Im Setup-AP-Betrieb: konfiguriertes WLAN nur alle 60 s einmal probieren,
-// und gar nicht, solange ein Gerät mit dem Setup-AP verbunden ist
+// Im Setup-AP-Betrieb: konfiguriertes WLAN nur alle 2 min einmal probieren –
+// und gar nicht, solange ein Gerät am Setup-AP hängt oder BLE verbunden ist
+// (der WLAN-Scan wirft sonst laufende Bluetooth-Kopplungen aus der Kurve)
 void manageSta(uint32_t now) {
   if (!apActive || WiFi.status() == WL_CONNECTED || cfg.ssid.length() == 0) return;
 
-  if (WiFi.softAPgetStationNum() > 0) {        // Client verbunden -> AP nicht stören
+  if (WiFi.softAPgetStationNum() > 0 || bleKeyboard.isConnected()) {
     if (staTrying) {
       WiFi.disconnect();
       staTrying = false;
