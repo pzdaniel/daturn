@@ -37,7 +37,7 @@
 #include <esp_sleep.h>
 #include <driver/rtc_io.h>
 
-#define DEBUG_MODE      0
+#define DEBUG_MODE      1                // Testphase: Pedal-/OSC-Ereignisse auf der Konsole zeigen
 
 // ---------- Werkseinstellungen (per Weboberfläche änderbar, in NVS gespeichert) ----------
 #define DEF_WIFI_SSID   "XR18-19-1B-07"  // SSID des XR18 (Access-Point-Modus) bzw. des Band-Routers
@@ -227,7 +227,17 @@ void saveConfig() {
 
 // ---------- LED ----------
 
+uint32_t ledDot565   = 0;                 // aktuelle LED-Farbe als Display-Farbe (RGB565)
+uint32_t drawnLedDot = 0xFFFFFFFF;        // zuletzt gezeichnete Punktfarbe (Sentinel = neu zeichnen)
+
 void setLed(uint8_t r, uint8_t g, uint8_t b, uint8_t w = 0) {
+  // Spiegel der LED für den Display-Leuchtpunkt: Weiß-Kanal einmischen und
+  // Helligkeit anheben, damit die gedimmten Stufen auf dem LCD sichtbar sind
+  const uint8_t rr = (uint8_t)min(255, ((int)r + w) * 4);
+  const uint8_t gg = (uint8_t)min(255, ((int)g + w) * 4);
+  const uint8_t bb = (uint8_t)min(255, ((int)b + w) * 4);
+  ledDot565 = ((rr & 0xF8) << 8) | ((gg & 0xFC) << 3) | (bb >> 3);
+
   const uint32_t c = pixels.Color(r, g, b, w);
   if (c == currentColor) return;          // nur bei Änderung wirklich senden
   currentColor = c;
@@ -345,6 +355,18 @@ void updateDisplay() {
 
   // Firmware-Version klein unten rechts
   drawText(312 - (int16_t)strlen(DATURN_BUILD) * 6, 162, 1, COL_GREY, DATURN_BUILD);
+
+  drawnLedDot = 0xFFFFFFFF;               // Vollbild-Redraw hat den Leuchtpunkt gelöscht
+}
+
+// Virtuelle Status-LED auf dem Display: folgt exakt der LED-Farblogik
+// (gedimmt beim Halten, heller Blitz beim Auslösen, Blau-Blinken ohne BLE).
+// Wird separat gezeichnet, damit nicht bei jedem Blink der ganze Schirm neu malt.
+void drawLedDot() {
+  if (ledDot565 == drawnLedDot) return;
+  drawnLedDot = ledDot565;
+  gfx->fillCircle(128, 100, 10, (uint16_t)ledDot565);
+  gfx->drawCircle(128, 100, 11, COL_GREY);
 }
 
 // ---------- OSC (minimal, ohne Zusatzbibliothek) ----------
@@ -395,6 +417,7 @@ void oscPoll() {
     if (n <= 0) continue;
     buf[n] = 0;
     const char *addr = (const char *)buf;
+    if (DEBUG_MODE) { Serial.print("OSC rx: "); Serial.println(addr); }
 
     for (uint8_t i = 0; i < 2; i++) {
       char expect[20];
@@ -442,7 +465,10 @@ void triggerPedal(Pedal &p, uint32_t now) {
       break;
 
     case ACTION_CH_SWITCH:
-      if (WiFi.status() != WL_CONNECTED) return;
+      if (WiFi.status() != WL_CONNECTED) {
+        if (DEBUG_MODE) Serial.println("ChSwitch ignoriert: kein WLAN");
+        return;
+      }
       sendChOn(selectedCh, false);             // verlassenen Kanal sicherheitshalber muten
       chMuted[selectedCh] = true;
       selectedCh ^= 1;
@@ -453,7 +479,11 @@ void triggerPedal(Pedal &p, uint32_t now) {
       break;
 
     case ACTION_MUTE_TOGGLE: {
-      if (WiFi.status() != WL_CONNECTED) return;
+      if (WiFi.status() != WL_CONNECTED) {
+        if (DEBUG_MODE) Serial.println("Mute ignoriert: kein WLAN");
+        return;
+      }
+      if (DEBUG_MODE) { Serial.print("Mute-Pedal, Ziel "); Serial.println(cfg.xr18Ip); }
       const bool muteNow = !chMuted[selectedCh];
       sendChOn(selectedCh, !muteNow);
       chMuted[selectedCh] = muteNow;
@@ -738,6 +768,7 @@ void loop() {
   updateBattery(now);
   updateLed(now, bleKeyboard.isConnected());
   updateDisplay();
+  drawLedDot();
 
 #if IDLE_SLEEP_MS > 0
   // Nicht einschlafen, solange jemand auf dem Setup-AP hängt
