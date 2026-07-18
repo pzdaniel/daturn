@@ -184,11 +184,10 @@ Pedale wieder gegen **GND** (interne Pull-ups). Besonderheiten:
   ST7789-Treiber (Offsets 34/0).
 - **Aufwecken aus dem Deep Sleep nur über Pedal 1** (der esp32-Core 2.x kann beim S3
   nur einen einzelnen Wakeup-Pin). Display und LED gehen im Deep Sleep aus.
-- **Akku:** Einen einzelnen 3,7-V-LiPo (empfohlen ≤2000 mAh) an die kleine 2-Pin-Buchse
-  (MX1.25) des Boards anschließen – falls die eigene Platinen-Revision keine Buchse hat,
-  alternativ Akku-Plus an den **VBAT-Pin** des Headers und Minus an **GND**.
-  **Polarität prüfen!** Bei Kauf-Akkus mit Stecker ist +/− nicht genormt.
-  Geladen wird über USB-C (Lade-LED leuchtet beim Laden).
+- **Akku:** Dieses Board hat **keine Akku-Buchse** – der Akku-Anschluss ist laut
+  Waveshare-Doku der **Pin-Header**: Akku-**Plus an den VBAT-Pin**, **Minus an GND**
+  (die beiden Pins liegen direkt nebeneinander). Einen einzelnen 3,7-V-LiPo verwenden;
+  das Lade-Management ist onboard, geladen wird über USB-C. **Polarität prüfen!**
 - **Akku-Anzeige:** Die Firmware misst die Akkuspannung an **GPIO 1** (Header-Pin 1)
   über einen Spannungsteiler **200 kΩ/100 kΩ** (VBAT → 200k → GPIO 1 → 100k → GND)
   und zeigt den Ladestand oben rechts im Display sowie am Tablet
