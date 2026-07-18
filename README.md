@@ -184,9 +184,16 @@ Pedale wieder gegen **GND** (interne Pull-ups). Besonderheiten:
   ST7789-Treiber (Offsets 34/0).
 - **Aufwecken aus dem Deep Sleep nur über Pedal 1** (der esp32-Core 2.x kann beim S3
   nur einen einzelnen Wakeup-Pin). Display und LED gehen im Deep Sleep aus.
-- **Akku:** 3,7-V-LiPo an den Akku-Anschluss des Boards (bzw. VBAT-Pin), Laden über USB-C
-  übernimmt das Board. Akkustands-Anzeige per `setBatteryLevel()` ist vorbereitet,
-  sobald der Mess-GPIO des Boards verifiziert ist (siehe Waveshare-Wiki).
+- **Akku:** Einen einzelnen 3,7-V-LiPo (empfohlen ≤2000 mAh) an die kleine 2-Pin-Buchse
+  (MX1.25) des Boards anschließen – falls die eigene Platinen-Revision keine Buchse hat,
+  alternativ Akku-Plus an den **VBAT-Pin** des Headers und Minus an **GND**.
+  **Polarität prüfen!** Bei Kauf-Akkus mit Stecker ist +/− nicht genormt.
+  Geladen wird über USB-C (Lade-LED leuchtet beim Laden).
+- **Akku-Anzeige:** Die Firmware misst die Akkuspannung an **GPIO 1** (Header-Pin 1)
+  über einen Spannungsteiler **200 kΩ/100 kΩ** (VBAT → 200k → GPIO 1 → 100k → GND)
+  und zeigt den Ladestand oben rechts im Display sowie am Tablet
+  (`setBatteryLevel`). Ohne Teiler/Akku wird die Anzeige automatisch ausgeblendet –
+  die zwei Widerstände sind also optional. GPIO 1 dafür freihalten.
 - Arduino IDE: Board **ESP32S3 Dev Module** wählen (Flash Size 16MB, PSRAM „OPI PSRAM“,
   Partition Scheme „Huge App“, USB CDC On Boot Enabled), zusätzlich die Bibliothek
   **„GFX Library for Arduino“** (Arduino_GFX) in Version **1.4.9** über den
