@@ -531,6 +531,8 @@ void handleRoot() {
   h += "<label>Ger&auml;tename (nach &Auml;nderung neu koppeln)</label><input name='btname' maxlength='20' value='" + htmlEscape(cfg.btName) + "'>";
   h += F("<label><input type='checkbox' name='bletest' value='1' style='width:auto'> "
          "N&auml;chster Start einmalig ohne WLAN (BLE-Kopplungstest)</label>");
+  h += F("<label><input type='checkbox' name='newid' value='1' style='width:auto'> "
+         "Neue Bluetooth-Identit&auml;t (neue Funk-Adresse; alle Ger&auml;te m&uuml;ssen neu koppeln)</label>");
   h += F("</div><button type='submit'>Speichern &amp; Neustart</button></form>"
          "</main></body></html>");
 
@@ -556,6 +558,9 @@ void handleSave() {
 
   prefs.begin("daturn", false);
   prefs.putUChar("bletest", server.hasArg("bletest") ? 1 : 0);
+  if (server.hasArg("newid")) {
+    prefs.putUChar("macoff", prefs.getUChar("macoff", 0) + 1);
+  }
   prefs.end();
 
   server.send(200, "text/html",
@@ -634,7 +639,18 @@ void setup() {
   prefs.begin("daturn", false);
   bleTestMode = prefs.getUChar("bletest", 0) == 1;
   if (bleTestMode) prefs.putUChar("bletest", 0);
+  const uint8_t macOff = prefs.getUChar("macoff", 0);
   prefs.end();
+
+  // "Neue Bluetooth-Identität": Basis-MAC verschieben, damit das Gerät für
+  // alle Hosts als fabrikneu gilt (alte Kopplungsreste greifen nicht mehr).
+  // Muss vor dem Start von BLE/WLAN passieren.
+  if (macOff) {
+    uint8_t mac[6];
+    esp_efuse_mac_get_default(mac);
+    mac[5] += macOff;
+    esp_base_mac_addr_set(mac);
+  }
 
   for (size_t i = 0; i < PEDAL_COUNT; i++) {
     pinMode(pedals[i].pin, INPUT_PULLUP);
