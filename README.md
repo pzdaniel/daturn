@@ -188,11 +188,13 @@ Pedale wieder gegen **GND** (interne Pull-ups). Besonderheiten:
   Waveshare-Doku der **Pin-Header**: Akku-**Plus an den VBAT-Pin**, **Minus an GND**
   (die beiden Pins liegen direkt nebeneinander). Einen einzelnen 3,7-V-LiPo verwenden;
   das Lade-Management ist onboard, geladen wird über USB-C. **Polarität prüfen!**
-- **Akku-Anzeige:** Die Firmware misst die Akkuspannung an **GPIO 1** (Header-Pin 1)
-  über einen Spannungsteiler **200 kΩ/100 kΩ** (VBAT → 200k → GPIO 1 → 100k → GND)
-  und zeigt den Ladestand oben rechts im Display sowie am Tablet
-  (`setBatteryLevel`). Ohne Teiler/Akku wird die Anzeige automatisch ausgeblendet –
-  die zwei Widerstände sind also optional. GPIO 1 dafür freihalten.
+- **Akku-Anzeige:** Die Akkuspannung liegt **onboard** über einen 200k/100k-Teiler an
+  **GPIO 1** an (so nutzt es auch Waveshares eigenes ADC-Demo) – es sind also keine
+  externen Widerstände nötig. Die Firmware misst dort alle 30 s und zeigt den
+  Ladestand oben rechts im Display sowie am Tablet (`setBatteryLevel`). Ohne Akku
+  wird die Anzeige automatisch ausgeblendet. GPIO 1 nicht anderweitig belegen.
+  Hinweis: Am USB-Kabel zeigt die Messung die Ladespannung (~100 %) – aussagekräftig
+  ist der Wert im Akkubetrieb.
 - Arduino IDE: Board **ESP32S3 Dev Module** wählen (Flash Size 16MB, PSRAM „OPI PSRAM“,
   Partition Scheme „Huge App“, USB CDC On Boot Enabled), zusätzlich die Bibliothek
   **„GFX Library for Arduino“** (Arduino_GFX) in Version **1.4.9** über den
