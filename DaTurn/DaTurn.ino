@@ -38,6 +38,8 @@
 #define DEF_CH_A        1                // Mixer-Kanal A (1..16), z. B. Instrument 1
 #define DEF_CH_B        2                // Mixer-Kanal B (1..16), z. B. Instrument 2
 #define DEF_BT_NAME     "DaTurn2"        // Bluetooth-Gerätename (per Weboberfläche änderbar)
+#define DEF_LABEL_A     "A"              // Anzeige-Zeichen Kanal A (A-Z, 0-9)
+#define DEF_LABEL_B     "B"              // Anzeige-Zeichen Kanal B (A-Z, 0-9)
 
 #define XR18_PORT       10024            // OSC-Port der X-AIR-Serie (X32 nutzt 10023)
 #define XREMOTE_MS      8000             // /xremote hält ~10 s – rechtzeitig erneuern
@@ -97,7 +99,22 @@ struct Config {
   uint8_t ch1;
   uint8_t ch2;
   String  btName;
+  String  labA;
+  String  labB;
 } cfg;
+
+// Ein Zeichen A-Z/0-9, sonst Standardwert
+String sanitizeLabel(String s, const char *def) {
+  s.trim();
+  s.toUpperCase();
+  if (s.length() > 0) {
+    const char c = s[0];
+    if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) return String(c);
+  }
+  return String(def);
+}
+
+String chLabel(uint8_t idx) { return idx == 0 ? cfg.labA : cfg.labB; }
 
 BleKeyboard bleKeyboard("DaTurn", "DPommranz", 100);
 Adafruit_NeoPixel pixels(NUM_PIXELS, RGBW_PIN, NEO_RGBW + NEO_KHZ800);
@@ -130,6 +147,8 @@ void loadConfig() {
   cfg.ch1    = prefs.getUChar("ch1", DEF_CH_A);
   cfg.ch2    = prefs.getUChar("ch2", DEF_CH_B);
   cfg.btName = prefs.getString("btname", DEF_BT_NAME);
+  cfg.labA   = sanitizeLabel(prefs.getString("labA", DEF_LABEL_A), DEF_LABEL_A);
+  cfg.labB   = sanitizeLabel(prefs.getString("labB", DEF_LABEL_B), DEF_LABEL_B);
   prefs.end();
 }
 
@@ -141,6 +160,8 @@ void saveConfig() {
   prefs.putUChar("ch1", cfg.ch1);
   prefs.putUChar("ch2", cfg.ch2);
   prefs.putString("btname", cfg.btName);
+  prefs.putString("labA", cfg.labA);
+  prefs.putString("labB", cfg.labB);
   prefs.end();
 }
 
@@ -347,10 +368,10 @@ void handleRoot() {
   h += F("<div class='card'><h2 style='margin-top:0'>Status</h2><table class='st'>");
   h += "<tr><td>WLAN</td><td>" + wifiState + "</td></tr>";
   h += String("<tr><td>BLE</td><td>") + (bleKeyboard.isConnected() ? "verbunden" : "nicht verbunden") + "</td></tr>";
-  h += String("<tr><td>Gew&auml;hlt</td><td>Kanal ") + (selectedCh == 0 ? "A" : "B") +
+  h += "<tr><td>Gew&auml;hlt</td><td>Kanal " + htmlEscape(chLabel(selectedCh)) +
        " (Mixer-Kanal " + String(mixerChannel(selectedCh)) + ")</td></tr>";
-  h += String("<tr><td>Mute</td><td>A: ") + (chMuted[0] ? "stumm" : "an") +
-       " &middot; B: " + (chMuted[1] ? "stumm" : "an") + "</td></tr>";
+  h += "<tr><td>Mute</td><td>" + htmlEscape(cfg.labA) + ": " + (chMuted[0] ? "stumm" : "an") +
+       " &middot; " + htmlEscape(cfg.labB) + ": " + (chMuted[1] ? "stumm" : "an") + "</td></tr>";
   h += "<tr><td>Firmware</td><td>" DATURN_BUILD "</td></tr>";
   h += F("</table></div>");
 
@@ -361,7 +382,9 @@ void handleRoot() {
   h += "<label>XR18-IP-Adresse</label><input name='ip' value='" + htmlEscape(cfg.xr18Ip) + "'>";
   h += F("</div><div class='card'><h2 style='margin-top:0'>Kan&auml;le</h2>");
   h += "<label>Mixer-Kanal A</label><input name='ch1' type='number' min='1' max='16' value='" + String(cfg.ch1) + "'>";
+  h += "<label>Anzeige-Zeichen Kanal A (A&ndash;Z, 0&ndash;9)</label><input name='la' maxlength='1' value='" + htmlEscape(cfg.labA) + "'>";
   h += "<label>Mixer-Kanal B</label><input name='ch2' type='number' min='1' max='16' value='" + String(cfg.ch2) + "'>";
+  h += "<label>Anzeige-Zeichen Kanal B (A&ndash;Z, 0&ndash;9)</label><input name='lb' maxlength='1' value='" + htmlEscape(cfg.labB) + "'>";
   h += F("</div><div class='card'><h2 style='margin-top:0'>Bluetooth</h2>");
   h += "<label>Ger&auml;tename (nach &Auml;nderung neu koppeln)</label><input name='btname' maxlength='20' value='" + htmlEscape(cfg.btName) + "'>";
   h += F("</div><button type='submit'>Speichern &amp; Neustart</button></form>"
@@ -383,6 +406,8 @@ void handleSave() {
   if (bn.length() == 0) bn = DEF_BT_NAME;
   if (bn.length() > 20) bn = bn.substring(0, 20);
   cfg.btName = bn;
+  cfg.labA   = sanitizeLabel(server.arg("la"), DEF_LABEL_A);
+  cfg.labB   = sanitizeLabel(server.arg("lb"), DEF_LABEL_B);
   saveConfig();
 
   server.send(200, "text/html",
