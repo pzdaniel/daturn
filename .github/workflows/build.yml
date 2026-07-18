@@ -48,13 +48,10 @@ jobs:
       # USE_NIMBLE: Bluedroid-Pairing scheitert auf neueren Android-Versionen,
       # der NimBLE-Modus der Bibliothek ist die dokumentierte Loesung.
       # DebugLevel=info: damit die Konsole (ESP Web Tools) brauchbare Logs zeigt.
-      - name: Sketch kompilieren (XIAO ESP32C3)
-        run: |
-          arduino-cli compile \
-            --fqbn esp32:esp32:XIAO_ESP32C3:PartitionScheme=huge_app,CDCOnBoot=cdc,DebugLevel=info \
-            --build-property "compiler.cpp.extra_flags=-DDATURN_BUILD=\"build-${GITHUB_RUN_NUMBER}\" -DUSE_NIMBLE=1" \
-            --output-dir build \
-            DaTurn
+      #
+      # XIAO-ESP32C3-Build waehrend der Waveshare-Testphase deaktiviert (spart
+      # Buildzeit) - zum Reaktivieren den Schritt aus der Git-History herstellen
+      # und den ESP32-C3-Eintrag im web/manifest.json wieder ergaenzen.
 
       - name: Sketch kompilieren (Waveshare ESP32-S3-Touch-LCD-1.47)
         run: |
@@ -72,9 +69,6 @@ jobs:
           mkdir -p site
           cp web/index.html site/
           sed "s/__VERSION__/${VER}/g" web/manifest.json > site/manifest.json
-          cp build/DaTurn.ino.bootloader.bin "site/bootloader-${VER}.bin"
-          cp build/DaTurn.ino.partitions.bin "site/partitions-${VER}.bin"
-          cp build/DaTurn.ino.bin            "site/firmware-${VER}.bin"
           cp build-s3/DaTurn_S3.ino.bootloader.bin "site/s3-bootloader-${VER}.bin"
           cp build-s3/DaTurn_S3.ino.partitions.bin "site/s3-partitions-${VER}.bin"
           cp build-s3/DaTurn_S3.ino.bin            "site/s3-firmware-${VER}.bin"
