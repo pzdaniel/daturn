@@ -490,6 +490,12 @@ void setup() {
   pixels.show();
 
   gfx->begin();
+  // JD9853-Eigenheit: gegenüber dem ST7789 ist die X-Achse gespiegelt und die
+  // Farbreihenfolge BGR. MADCTL (0x36) daher manuell auf MY|MX|MV|BGR setzen –
+  // die 34-Pixel-Offsets sind symmetrisch, die Spiegelung verschiebt also nichts.
+  bus->beginWrite();
+  bus->writeC8D8(0x36, 0xE8);
+  bus->endWrite();
   gfx->fillScreen(COL_BLACK);
   digitalWrite(PIN_LCD_BL, HIGH);              // Hintergrundbeleuchtung an
 
