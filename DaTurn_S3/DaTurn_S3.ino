@@ -340,6 +340,9 @@ void updateDisplay() {
   if (ui.ap)        drawText(8, 152, 2, COL_GREY, "Setup: http://4.4.4.4");
   else if (ui.wifi) drawText(8, 152, 2, COL_GREY, "http://" + WiFi.localIP().toString());
   else              drawText(8, 152, 2, COL_GREY, "suche WLAN ...");
+
+  // Firmware-Version klein unten rechts
+  drawText(312 - (int16_t)strlen(DATURN_BUILD) * 6, 162, 1, COL_GREY, DATURN_BUILD);
 }
 
 // ---------- OSC (minimal, ohne Zusatzbibliothek) ----------
