@@ -45,6 +45,7 @@
 #define DEF_XR18_IP     "192.168.1.1"    // im AP-Modus hat das XR18 immer 192.168.1.1
 #define DEF_CH_A        1                // Mixer-Kanal A (1..16), z. B. Instrument 1
 #define DEF_CH_B        2                // Mixer-Kanal B (1..16), z. B. Instrument 2
+#define DEF_BT_NAME     "DaTurn2"        // Bluetooth-Gerätename (per Weboberfläche änderbar)
 
 #define XR18_PORT       10024            // OSC-Port der X-AIR-Serie (X32 nutzt 10023)
 #define XREMOTE_MS      8000             // /xremote hält ~10 s – rechtzeitig erneuern
@@ -104,6 +105,7 @@ struct Config {
   String  xr18Ip;
   uint8_t ch1;
   uint8_t ch2;
+  String  btName;
 } cfg;
 
 BleKeyboard bleKeyboard("DaTurn", "DPommranz", 100);
@@ -182,6 +184,7 @@ void loadConfig() {
   cfg.xr18Ip = prefs.getString("ip",   DEF_XR18_IP);
   cfg.ch1    = prefs.getUChar("ch1", DEF_CH_A);
   cfg.ch2    = prefs.getUChar("ch2", DEF_CH_B);
+  cfg.btName = prefs.getString("btname", DEF_BT_NAME);
   prefs.end();
 }
 
@@ -192,6 +195,7 @@ void saveConfig() {
   prefs.putString("ip",   cfg.xr18Ip);
   prefs.putUChar("ch1", cfg.ch1);
   prefs.putUChar("ch2", cfg.ch2);
+  prefs.putString("btname", cfg.btName);
   prefs.end();
 }
 
@@ -290,7 +294,9 @@ void updateDisplay() {
     const uint16_t c = ui.chg ? COL_YELLOW : (ui.bat <= 20 ? COL_RED : COL_GREY);
     drawText(312 - t.length() * 12, 8, 2, c, t);
   } else {
-    drawText(240, 8, 2, COL_GREY, "DaTurn");
+    // Bluetooth-Name rechts oben (auf 7 Zeichen gekürzt, damit nichts überlappt)
+    const String n = cfg.btName.substring(0, 7);
+    drawText(312 - n.length() * 12, 8, 2, COL_GREY, n);
   }
 
   // Großer Kanalbuchstabe links, Details rechts
@@ -488,6 +494,8 @@ void handleRoot() {
   h += F("</div><div class='card'><h2 style='margin-top:0'>Kan&auml;le</h2>");
   h += "<label>Mixer-Kanal A</label><input name='ch1' type='number' min='1' max='16' value='" + String(cfg.ch1) + "'>";
   h += "<label>Mixer-Kanal B</label><input name='ch2' type='number' min='1' max='16' value='" + String(cfg.ch2) + "'>";
+  h += F("</div><div class='card'><h2 style='margin-top:0'>Bluetooth</h2>");
+  h += "<label>Ger&auml;tename (nach &Auml;nderung neu koppeln)</label><input name='btname' maxlength='20' value='" + htmlEscape(cfg.btName) + "'>";
   h += F("</div><button type='submit'>Speichern &amp; Neustart</button></form>"
          "</main></body></html>");
 
@@ -502,6 +510,11 @@ void handleSave() {
   cfg.xr18Ip = server.arg("ip");
   cfg.ch1    = constrain(server.arg("ch1").toInt(), 1, 16);
   cfg.ch2    = constrain(server.arg("ch2").toInt(), 1, 16);
+  String bn  = server.arg("btname");
+  bn.trim();
+  if (bn.length() == 0) bn = DEF_BT_NAME;
+  if (bn.length() > 20) bn = bn.substring(0, 20);
+  cfg.btName = bn;
   saveConfig();
 
   server.send(200, "text/html",
@@ -597,6 +610,7 @@ void setup() {
   gfx->fillScreen(COL_BLACK);
   digitalWrite(PIN_LCD_BL, HIGH);              // Hintergrundbeleuchtung an
 
+  bleKeyboard.setName(std::string(cfg.btName.c_str()));
   bleKeyboard.begin();
 
   WiFi.mode(WIFI_STA);
