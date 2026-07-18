@@ -90,7 +90,7 @@ struct Pedal {
   PedalAction action;
   uint8_t     key;                        // nur bei ACTION_KEY
   const char *name;
-  uint8_t     dimR, dimG, dimB, dimW;     // LED-Farbe solange gehalten (Original: Helligkeit 10)
+  uint8_t     dimR, dimG, dimB, dimW;     // LED-Farbe solange das Pedal gehalten wird
   bool        pressed;                    // entprellter Zustand
   bool        lastReading;                // letzter Rohwert
   uint32_t    lastChangeMs;               // Zeitpunkt der letzten Rohwert-Änderung
@@ -98,10 +98,10 @@ struct Pedal {
 
 // GPIO 4-7 liegen frei am Pinheader und sind RTC-fähig (Deep-Sleep-Wakeup über Pedal 1).
 Pedal pedals[] = {
-  { 4, ACTION_CH_SWITCH,   0,               "ChSwitch",  0,  0, 0, 10, false, false, 0 },  // ganz links
-  { 5, ACTION_KEY,         KEY_LEFT_ARROW,  "Left",     10,  0, 0,  0, false, false, 0 },
-  { 6, ACTION_KEY,         KEY_RIGHT_ARROW, "Right",     0, 10, 0,  0, false, false, 0 },
-  { 7, ACTION_MUTE_TOGGLE, 0,               "Mute",     10,  0, 10, 0, false, false, 0 },  // ganz rechts
+  { 4, ACTION_CH_SWITCH,   0,               "ChSwitch",   0,   0,   0, 100, false, false, 0 },  // ganz links
+  { 5, ACTION_KEY,         KEY_LEFT_ARROW,  "Left",     100,   0,   0,   0, false, false, 0 },
+  { 6, ACTION_KEY,         KEY_RIGHT_ARROW, "Right",      0, 100,   0,   0, false, false, 0 },
+  { 7, ACTION_MUTE_TOGGLE, 0,               "Mute",     100,   0, 100,   0, false, false, 0 },  // ganz rechts
 };
 const size_t PEDAL_COUNT = sizeof(pedals) / sizeof(pedals[0]);
 
@@ -172,6 +172,11 @@ void updateBattery(uint32_t now) {
   uint32_t mv = 0;
   for (int i = 0; i < 8; i++) mv += analogReadMilliVolts(BAT_ADC_PIN);
   const float vbat = (mv / 8) * BAT_DIV_FACTOR / 1000.0f;
+  if (DEBUG_MODE) {
+    // Rohwert immer loggen - zeigt, ob an GPIO1 überhaupt Akkuspannung anliegt
+    Serial.print("VBAT gemessen: "); Serial.print(vbat);
+    Serial.println(" V (GPIO1 x3)");
+  }
 
   if (vbat < 2.9f || vbat > 4.6f) {
     batPct = -1;
@@ -250,9 +255,10 @@ void flash(uint8_t r, uint8_t g, uint8_t b, uint8_t w, uint32_t now) {
   flashUntilMs = now + FLASH_MS;
 }
 
-// LED-Logik wie im Original (TTGO-Version):
-//   - heller Blitz (Helligkeit 100) für 100 ms beim Auslösen
-//   - gedimmte Pedalfarbe (Helligkeit 10) solange ein Pedal gehalten wird
+// LED-Logik:
+//   - helle Pedalfarbe, sobald und solange ein Pedal gedrückt wird
+//     (die Aktion selbst löst weiterhin beim Loslassen aus)
+//   - heller Blitz (100 ms) mit der Aktions-Farbe beim Auslösen
 //   - Blau 255 im 500-ms-Takt blinkend, solange BLE nicht verbunden ist
 //   - Blau 100 dauerhaft im verbundenen Leerlauf
 void updateLed(uint32_t now, bool bleConnected) {
@@ -459,8 +465,8 @@ void triggerPedal(Pedal &p, uint32_t now) {
     case ACTION_KEY:
       if (!bleKeyboard.isConnected()) return;
       bleKeyboard.write(p.key);
-      // heller Blitz in der Pedalfarbe, wie im Original
-      flash(p.dimR * 10, p.dimG * 10, p.dimB * 10, p.dimW * 10, now);
+      // kurzer Blitz in der Pedalfarbe als Sende-Bestätigung
+      flash(p.dimR, p.dimG, p.dimB, p.dimW, now);
       if (DEBUG_MODE) { Serial.print(p.name); Serial.println(" arrow sent"); }
       break;
 
