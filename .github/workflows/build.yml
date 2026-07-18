@@ -64,18 +64,21 @@ jobs:
             --output-dir build-s3 \
             DaTurn_S3
 
+      # Versionsnummer steckt in den Dateinamen: verhindert, dass der Browser
+      # beim Flashen alte .bin-Dateien aus dem Cache serviert
       - name: Installer-Seite zusammenstellen
         run: |
+          VER="build-${GITHUB_RUN_NUMBER}"
           mkdir -p site
           cp web/index.html site/
-          sed "s/__VERSION__/build-${GITHUB_RUN_NUMBER}/" web/manifest.json > site/manifest.json
-          cp build/DaTurn.ino.bootloader.bin site/bootloader.bin
-          cp build/DaTurn.ino.partitions.bin site/partitions.bin
-          cp build/DaTurn.ino.bin           site/firmware.bin
-          cp build-s3/DaTurn_S3.ino.bootloader.bin site/s3-bootloader.bin
-          cp build-s3/DaTurn_S3.ino.partitions.bin site/s3-partitions.bin
-          cp build-s3/DaTurn_S3.ino.bin            site/s3-firmware.bin
-          cp "$(find ~/.arduino15/packages/esp32/hardware/esp32 -name boot_app0.bin | head -1)" site/boot_app0.bin
+          sed "s/__VERSION__/${VER}/g" web/manifest.json > site/manifest.json
+          cp build/DaTurn.ino.bootloader.bin "site/bootloader-${VER}.bin"
+          cp build/DaTurn.ino.partitions.bin "site/partitions-${VER}.bin"
+          cp build/DaTurn.ino.bin            "site/firmware-${VER}.bin"
+          cp build-s3/DaTurn_S3.ino.bootloader.bin "site/s3-bootloader-${VER}.bin"
+          cp build-s3/DaTurn_S3.ino.partitions.bin "site/s3-partitions-${VER}.bin"
+          cp build-s3/DaTurn_S3.ino.bin            "site/s3-firmware-${VER}.bin"
+          cp "$(find ~/.arduino15/packages/esp32/hardware/esp32 -name boot_app0.bin | head -1)" "site/boot_app0-${VER}.bin"
           ls -la site
 
       - name: Firmware als Artefakt sichern
