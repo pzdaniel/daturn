@@ -128,11 +128,12 @@ BLE-Verbindung.
 1. **Board-Paket:** `esp32` von Espressif, **Version 2.0.17** (im Boardverwalter über das
    Versions-Dropdown wählen!). Boardauswahl: *XIAO_ESP32C3*.
    Für den seriellen Monitor ggf. *USB CDC On Boot: Enabled* setzen.
-2. **ESP32-BLE-Keyboard** (T-vK): als ZIP von GitHub installieren, `USE_NIMBLE`
-   **nicht** aktivieren. Ein Handgriff ist nötig: In `BleKeyboard.cpp` die Zeile mit
-   `ESP_LE_AUTH_REQ_SC_MITM_BOND` auf `ESP_LE_AUTH_REQ_SC_BOND` ändern – die
-   MITM-Anforderung ohne PIN-Eingabemöglichkeit lässt das Koppeln auf manchen
-   Android-Geräten scheitern. Der CI-Build patcht das automatisch.
+2. **ESP32-BLE-Keyboard** (T-vK): als ZIP von GitHub installieren und in
+   `BleKeyboard.h` die Zeile `#define USE_NIMBLE` **einkommentieren** – der
+   Bluedroid-Standardmodus scheitert auf neueren Android-Versionen beim Koppeln,
+   der NimBLE-Modus ist die dokumentierte Lösung. Dazu **NimBLE-Arduino 1.4.3**
+   über den Bibliotheksverwalter installieren (1.4.x passt zu Core 2.0.17;
+   NimBLE 2.x und Core 3.x vertragen sich mit dieser Bibliothek nicht).
    Tipp bei Kopplungsproblemen: alte Kopplung am Gerät entfernen und neu koppeln.
 3. **Adafruit NeoPixel** über den Bibliotheksverwalter.
 

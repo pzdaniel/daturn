@@ -35,6 +35,7 @@ jobs:
           arduino-cli core install esp32:esp32@2.0.17
           arduino-cli lib install "Adafruit NeoPixel"
           arduino-cli lib install "GFX Library for Arduino@1.4.9"
+          arduino-cli lib install "NimBLE-Arduino@1.4.3"
           mkdir -p ~/Arduino/libraries
           git clone --depth 1 https://github.com/T-vK/ESP32-BLE-Keyboard ~/Arduino/libraries/ESP32-BLE-Keyboard
           # Pairing-Fix: die Bibliothek fordert ab Werk SC_MITM_BOND an - MITM ist
@@ -44,19 +45,22 @@ jobs:
           grep -q "ESP_LE_AUTH_REQ_SC_BOND" ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
           ! grep -q "SC_MITM_BOND" ~/Arduino/libraries/ESP32-BLE-Keyboard/BleKeyboard.cpp
 
+      # USE_NIMBLE: Bluedroid-Pairing scheitert auf neueren Android-Versionen,
+      # der NimBLE-Modus der Bibliothek ist die dokumentierte Loesung.
+      # DebugLevel=info: damit die Konsole (ESP Web Tools) brauchbare Logs zeigt.
       - name: Sketch kompilieren (XIAO ESP32C3)
         run: |
           arduino-cli compile \
-            --fqbn esp32:esp32:XIAO_ESP32C3:PartitionScheme=huge_app,CDCOnBoot=cdc \
-            --build-property "compiler.cpp.extra_flags=-DDATURN_BUILD=\"build-${GITHUB_RUN_NUMBER}\"" \
+            --fqbn esp32:esp32:XIAO_ESP32C3:PartitionScheme=huge_app,CDCOnBoot=cdc,DebugLevel=info \
+            --build-property "compiler.cpp.extra_flags=-DDATURN_BUILD=\"build-${GITHUB_RUN_NUMBER}\" -DUSE_NIMBLE=1" \
             --output-dir build \
             DaTurn
 
       - name: Sketch kompilieren (Waveshare ESP32-S3-Touch-LCD-1.47)
         run: |
           arduino-cli compile \
-            --fqbn esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=huge_app,CDCOnBoot=cdc \
-            --build-property "compiler.cpp.extra_flags=-DDATURN_BUILD=\"build-${GITHUB_RUN_NUMBER}\"" \
+            --fqbn esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,PartitionScheme=huge_app,CDCOnBoot=cdc,DebugLevel=info \
+            --build-property "compiler.cpp.extra_flags=-DDATURN_BUILD=\"build-${GITHUB_RUN_NUMBER}\" -DUSE_NIMBLE=1" \
             --output-dir build-s3 \
             DaTurn_S3
 
