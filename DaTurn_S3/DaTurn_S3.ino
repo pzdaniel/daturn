@@ -52,6 +52,7 @@
 #define AP_SSID         "DaTurn-Setup"
 #define AP_PASS         "daturn4444"
 #define STA_TIMEOUT_MS  30000            // WLAN nach 30 s nicht da -> Setup-AP zusätzlich starten
+#define STA_RETRY_MS    60000            // im AP-Modus: WLAN-Versuch nur noch alle 60 s
 // Merk-IP des Setup-AP. Achtung: 4.4.4.4 ist eigentlich eine öffentliche Adresse –
 // falls die Seite am Handy nicht lädt, mobile Daten kurz ausschalten.
 const IPAddress AP_IP(4, 4, 4, 4);
@@ -117,6 +118,8 @@ uint8_t  flashR, flashG, flashB, flashW;
 uint32_t lastActivityMs = 0;
 uint32_t lastXremoteMs  = 0;
 bool     apActive       = false;
+uint32_t lastStaTryMs   = 0;
+bool     staTrying      = false;
 
 uint8_t mixerChannel(uint8_t idx) { return idx == 0 ? cfg.ch1 : cfg.ch2; }
 
@@ -231,8 +234,15 @@ void updateDisplay() {
 
   // Großer Kanalbuchstabe links, Details rechts
   drawText(36, 44, 12, muted ? COL_RED : COL_GREEN, ui.ch == 0 ? "A" : "B");
-  drawText(150, 64, 3, COL_WHITE, "Kanal " + String(mixerChannel(ui.ch)));
-  drawText(150, 100, 3, muted ? COL_RED : COL_GREEN, muted ? "STUMM" : "AN");
+  if (ui.ap) {
+    // Solange der Setup-AP läuft: Zugangsdaten direkt anzeigen
+    drawText(150, 52, 2, COL_YELLOW, AP_SSID);
+    drawText(150, 76, 2, COL_WHITE,  "PW: " AP_PASS);
+    drawText(150, 100, 2, COL_WHITE, "http://4.4.4.4");
+  } else {
+    drawText(150, 64, 3, COL_WHITE, "Kanal " + String(mixerChannel(ui.ch)));
+    drawText(150, 100, 3, muted ? COL_RED : COL_GREEN, muted ? "STUMM" : "AN");
+  }
 
   // Fußzeile
   if (ui.ap)        drawText(8, 152, 2, COL_GREY, "Setup: http://4.4.4.4");
@@ -444,12 +454,36 @@ void handleSave() {
 
 void startAp() {
   if (apActive) return;
-  WiFi.mode(WIFI_AP_STA);                      // STA versucht parallel weiter zu verbinden
+  WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(AP_SSID, AP_PASS);
   delay(100);                                  // DHCP-Server erst nach softAP() umkonfigurieren
   WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
   apActive = true;
+  // Dauerndes STA-Scannen legt den eigenen AP lahm (Handy kann sich nicht
+  // verbinden) – ab jetzt nur noch dosierte Einzelversuche über manageSta()
+  WiFi.setAutoReconnect(false);
+  WiFi.disconnect();
+  staTrying = false;
   if (DEBUG_MODE) { Serial.print("Setup-AP: "); Serial.println(WiFi.softAPIP()); }
+}
+
+// Im Setup-AP-Betrieb: konfiguriertes WLAN nur alle 60 s einmal probieren,
+// und gar nicht, solange ein Gerät mit dem Setup-AP verbunden ist
+void manageSta(uint32_t now) {
+  if (!apActive || WiFi.status() == WL_CONNECTED || cfg.ssid.length() == 0) return;
+
+  if (WiFi.softAPgetStationNum() > 0) {        // Client verbunden -> AP nicht stören
+    if (staTrying) {
+      WiFi.disconnect();
+      staTrying = false;
+    }
+    return;
+  }
+  if (now - lastStaTryMs >= STA_RETRY_MS) {
+    lastStaTryMs = now;
+    staTrying = true;
+    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
+  }
 }
 
 // ---------- Deep Sleep ----------
@@ -540,6 +574,7 @@ void loop() {
 
   // Konfiguriertes WLAN dauerhaft nicht erreichbar -> Setup-AP zusätzlich anbieten
   if (!apActive && WiFi.status() != WL_CONNECTED && now >= STA_TIMEOUT_MS) startAp();
+  manageSta(now);
 
   server.handleClient();
   oscTick(now);
