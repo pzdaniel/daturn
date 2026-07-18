@@ -91,6 +91,10 @@ der ESP zusätzlich ein eigenes WLAN auf:
 
 - SSID `DaTurn-Setup`, Passwort `daturn4444`, Seite: **http://4.4.4.4**
 
+Nach dem Verbinden öffnet sich die Konfig-Seite automatisch als
+**Netzwerkanmeldeseite** (Captive Portal, wie bei WLED). Falls nicht:
+`http://4.4.4.4` manuell im Browser öffnen.
+
 Hinweis zur Merk-IP `4.4.4.4`: Das ist eigentlich eine öffentliche Internet-Adresse.
 Lädt die Seite am Handy nicht, kurz die **mobilen Daten ausschalten** – manche Handys
 schicken die Anfrage sonst übers Mobilfunknetz ins echte Internet statt an den ESP.

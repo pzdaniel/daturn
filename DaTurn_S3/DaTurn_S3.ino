@@ -31,6 +31,7 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <esp_sleep.h>
@@ -107,6 +108,7 @@ Arduino_GFX *gfx = new Arduino_ST7789(bus, 40 /* RST */, 1 /* Rotation: Querform
                                       172, 320, 34, 0, 34, 0);
 WiFiUDP udp;
 WebServer server(80);
+DNSServer dnsServer;
 Preferences prefs;
 
 RTC_DATA_ATTR uint8_t selectedCh = 0;     // 0 = Kanal A, 1 = Kanal B; überlebt den Deep Sleep
@@ -459,6 +461,9 @@ void startAp() {
   delay(100);                                  // DHCP-Server erst nach softAP() umkonfigurieren
   WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
   apActive = true;
+  // Captive Portal: alle DNS-Anfragen auf uns umleiten – das Handy erkennt
+  // ein Anmeldeportal und öffnet die Konfig-Seite automatisch (wie bei WLED)
+  dnsServer.start(53, "*", AP_IP);
   // Dauerndes STA-Scannen legt den eigenen AP lahm (Handy kann sich nicht
   // verbinden) – ab jetzt nur noch dosierte Einzelversuche über manageSta()
   WiFi.setAutoReconnect(false);
@@ -545,7 +550,12 @@ void setup() {
 
   server.on("/", HTTP_GET, handleRoot);
   server.on("/save", HTTP_POST, handleSave);
-  server.onNotFound([]() { server.sendHeader("Location", "/"); server.send(302); });
+  // Unbekannte URLs (auch die Connectivity-Checks der Handys) absolut auf die
+  // Konfig-Seite umleiten – dadurch springt die "Netzwerkanmeldeseite" an
+  server.onNotFound([]() {
+    server.sendHeader("Location", "http://4.4.4.4/");
+    server.send(302);
+  });
   server.begin();
   MDNS.begin("daturn");                        // -> http://daturn.local
   MDNS.addService("http", "tcp", 80);
@@ -576,6 +586,7 @@ void loop() {
   if (!apActive && WiFi.status() != WL_CONNECTED && now >= STA_TIMEOUT_MS) startAp();
   manageSta(now);
 
+  if (apActive) dnsServer.processNextRequest();
   server.handleClient();
   oscTick(now);
   updateLed(now, bleKeyboard.isConnected());
