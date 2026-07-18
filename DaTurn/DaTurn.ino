@@ -497,6 +497,9 @@ void setup() {
   bleKeyboard.begin();
 
   WiFi.mode(WIFI_STA);
+  // Das XR18 kann im Access-Point-Modus nur WEP - der ESP32 lehnt WEP-Netze
+  // standardmaessig ab (Mindestsicherheit WPA2), deshalb hier absenken
+  WiFi.setMinSecurity(WIFI_AUTH_WEP);
   WiFi.setAutoReconnect(true);
   if (cfg.ssid.length() > 0) {
     WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());  // nicht blockierend
